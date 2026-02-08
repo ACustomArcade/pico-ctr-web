@@ -6,6 +6,7 @@
     <title>PicoCTR Web Configurator</title>
     <link rel="stylesheet" href="css/style.css">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎮</text></svg>">
+    <script src="https://cdn.jsdelivr.net/npm/@jaames/iro@5"></script>
 </head>
 <body>
     <header>
@@ -96,11 +97,11 @@
                 </div>
 
                 <!-- Color Picker -->
-                <div class="form-group" id="color-group">
+                <div class="form-group form-group-vertical" id="color-group">
                     <label>Solid Color</label>
-                    <div class="color-picker-wrapper">
-                        <input type="color" id="setting-color-picker" class="color-input">
-                        <div class="color-values">
+                    <div class="color-picker-container">
+                        <div id="iro-picker"></div>
+                        <div class="color-rgb-inputs">
                             <div class="color-channel">
                                 <label for="setting-rgb_color_r">R</label>
                                 <input type="number" id="setting-rgb_color_r" class="form-input-small" min="0" max="255" data-field="rgb_color_r">
@@ -113,6 +114,7 @@
                                 <label for="setting-rgb_color_b">B</label>
                                 <input type="number" id="setting-rgb_color_b" class="form-input-small" min="0" max="255" data-field="rgb_color_b">
                             </div>
+                            <div class="color-hex" id="color-hex-display">#ff0000</div>
                         </div>
                     </div>
                 </div>

@@ -21,6 +21,11 @@
     let isFlashing = false;
     let latestRelease = null; // cached firmware manifest data
 
+    // Color picker state
+    let colorPicker = null;       // iro.js ColorPicker instance
+    let liveColorTimer = null;    // throttle timer for live device updates
+    const LIVE_COLOR_INTERVAL = 80; // ms between live device sends
+
     // ========================================================================
     // DOM References
     // ========================================================================
@@ -46,10 +51,10 @@
         // Settings
         enableRgb: $('#setting-enable_rgb'),
         animation: $('#setting-rgb_animation'),
-        colorPicker: $('#setting-color-picker'),
         colorR: $('#setting-rgb_color_r'),
         colorG: $('#setting-rgb_color_g'),
         colorB: $('#setting-rgb_color_b'),
+        colorHexDisplay: $('#color-hex-display'),
         ledCount: $('#setting-led_count'),
         brightness: $('#setting-led_brightness'),
         brightnessValue: $('#brightness-value'),
@@ -178,7 +183,11 @@
         dom.colorR.value = r;
         dom.colorG.value = g;
         dom.colorB.value = b;
-        dom.colorPicker.value = rgbToHex(r, g, b);
+        dom.colorHexDisplay.textContent = rgbToHex(r, g, b);
+        // Update iro.js picker without triggering input:change
+        if (colorPicker) {
+            colorPicker.color.rgb = { r, g, b };
+        }
 
         // LED Count
         dom.ledCount.value = settings.led_count || 64;
@@ -207,9 +216,9 @@
     const fieldDomMap = {
         enable_rgb:    () => [dom.enableRgb],
         rgb_animation: () => [dom.animation],
-        rgb_color_r:   () => [dom.colorR, dom.colorG, dom.colorB, dom.colorPicker],
-        rgb_color_g:   () => [dom.colorR, dom.colorG, dom.colorB, dom.colorPicker],
-        rgb_color_b:   () => [dom.colorR, dom.colorG, dom.colorB, dom.colorPicker],
+        rgb_color_r:   () => [dom.colorR, dom.colorG, dom.colorB],
+        rgb_color_g:   () => [dom.colorR, dom.colorG, dom.colorB],
+        rgb_color_b:   () => [dom.colorR, dom.colorG, dom.colorB],
         led_count:     () => [dom.ledCount],
         led_brightness:() => [dom.brightness],
     };
@@ -867,25 +876,56 @@
     // Event Handlers for Settings UI
     // ========================================================================
     function setupSettingsListeners() {
-        // Color picker ↔ RGB inputs sync
-        dom.colorPicker.addEventListener('input', () => {
-            const { r, g, b } = hexToRgb(dom.colorPicker.value);
-            dom.colorR.value = r;
-            dom.colorG.value = g;
-            dom.colorB.value = b;
-            checkUnsavedChanges();
-        });
+        // iro.js color picker → RGB inputs + hex display + live device send
+        if (colorPicker) {
+            // input:change fires only on user interaction (drag, click), not programmatic
+            colorPicker.on('input:change', (color) => {
+                const { r, g, b } = color.rgb;
+                dom.colorR.value = r;
+                dom.colorG.value = g;
+                dom.colorB.value = b;
+                dom.colorHexDisplay.textContent = color.hexString;
+                checkUnsavedChanges();
 
+                // Throttled live send to device
+                if (!liveColorTimer && picoctr && picoctr.connected) {
+                    liveColorTimer = setTimeout(async () => {
+                        liveColorTimer = null;
+                        try {
+                            await picoctr.setSettings(getSettingsFromUI());
+                        } catch (e) {
+                            // Silently ignore send errors during live drag
+                        }
+                    }, LIVE_COLOR_INTERVAL);
+                }
+            });
+
+            // When drag ends, do one final send to ensure last color is applied
+            colorPicker.on('input:end', async () => {
+                if (liveColorTimer) {
+                    clearTimeout(liveColorTimer);
+                    liveColorTimer = null;
+                }
+                if (picoctr && picoctr.connected) {
+                    try {
+                        await picoctr.setSettings(getSettingsFromUI());
+                    } catch (e) {
+                        // ignore
+                    }
+                }
+            });
+        }
+
+        // RGB number inputs → sync to iro.js picker + hex display
         [dom.colorR, dom.colorG, dom.colorB].forEach(input => {
             input.addEventListener('input', () => {
-                const r = parseInt(dom.colorR.value) || 0;
-                const g = parseInt(dom.colorG.value) || 0;
-                const b = parseInt(dom.colorB.value) || 0;
-                dom.colorPicker.value = rgbToHex(
-                    Math.min(255, Math.max(0, r)),
-                    Math.min(255, Math.max(0, g)),
-                    Math.min(255, Math.max(0, b))
-                );
+                const r = Math.min(255, Math.max(0, parseInt(dom.colorR.value) || 0));
+                const g = Math.min(255, Math.max(0, parseInt(dom.colorG.value) || 0));
+                const b = Math.min(255, Math.max(0, parseInt(dom.colorB.value) || 0));
+                if (colorPicker) {
+                    colorPicker.color.rgb = { r, g, b };
+                }
+                dom.colorHexDisplay.textContent = rgbToHex(r, g, b);
                 checkUnsavedChanges();
             });
         });
@@ -934,6 +974,19 @@
         // Populate dynamic UI elements
         populateAnimationSelect();
         updateColorGroupVisibility();
+
+        // Initialize iro.js color picker
+        colorPicker = new iro.ColorPicker('#iro-picker', {
+            width: 220,
+            color: '#ff0000',
+            borderWidth: 1,
+            borderColor: 'rgba(255,255,255,0.2)',
+            wheelLightness: false,
+            layout: [
+                { component: iro.ui.Wheel },
+                { component: iro.ui.Slider, options: { sliderType: 'value' } }
+            ]
+        });
 
         // Setup settings change listeners
         setupSettingsListeners();

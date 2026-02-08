@@ -294,37 +294,35 @@ main {
     border-color: var(--color-primary);
 }
 
-/* Color Picker */
-.color-picker-wrapper {
+/* Color Picker (iro.js) */
+.form-group-vertical {
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.color-picker-container {
     display: flex;
+    flex-direction: column;
     align-items: center;
     gap: 1rem;
-    flex: 1;
-    max-width: 350px;
+    width: 100%;
 }
 
-.color-input {
-    width: 48px;
-    height: 36px;
-    border: 2px solid var(--color-border);
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    background: none;
-    padding: 2px;
-}
-
-.color-input::-webkit-color-swatch-wrapper {
-    padding: 0;
-}
-
-.color-input::-webkit-color-swatch {
-    border: none;
-    border-radius: 4px;
-}
-
-.color-values {
+.color-rgb-inputs {
     display: flex;
-    gap: 0.5rem;
+    align-items: center;
+    gap: 0.75rem;
+    justify-content: center;
+}
+
+.color-hex {
+    font-family: monospace;
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 0.4rem 0.6rem;
 }
 
 .color-channel {
