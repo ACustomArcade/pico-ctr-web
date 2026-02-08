@@ -1,0 +1,788 @@
+/* ============================================
+   PicoCTR Web Configurator - Styles
+   ============================================ */
+
+:root {
+    --color-bg: #0f1117;
+    --color-surface: #1a1d27;
+    --color-surface-hover: #22263a;
+    --color-border: #2d3148;
+    --color-text: #e4e6f0;
+    --color-text-muted: #8b8fa8;
+    --color-primary: #6c5ce7;
+    --color-primary-hover: #7d6ff0;
+    --color-success: #00b894;
+    --color-success-hover: #00d9a5;
+    --color-warning: #fdcb6e;
+    --color-warning-hover: #ffd93d;
+    --color-danger: #e17055;
+    --color-danger-hover: #ff7b5c;
+    --color-info: #74b9ff;
+    --color-connected: #00b894;
+    --color-disconnected: #e17055;
+
+    --radius: 12px;
+    --radius-sm: 8px;
+    --shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+    --transition: 0.2s ease;
+}
+
+/* Reset */
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+    background: var(--color-bg);
+    color: var(--color-text);
+    line-height: 1.6;
+    min-height: 100vh;
+}
+
+/* Header */
+header {
+    background: linear-gradient(135deg, var(--color-primary), #a855f7);
+    padding: 2rem;
+    text-align: center;
+}
+
+.header-content h1 {
+    font-size: 1.8rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+}
+
+.subtitle {
+    opacity: 0.85;
+    font-size: 0.95rem;
+}
+
+/* Main */
+main {
+    max-width: 700px;
+    margin: 0 auto;
+    padding: 1.5rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+/* Cards */
+.card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    box-shadow: var(--shadow);
+}
+
+.card h2 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.warning-card {
+    border-color: var(--color-warning);
+    background: rgba(253, 203, 110, 0.08);
+}
+
+.warning-card h2 {
+    color: var(--color-warning);
+}
+
+/* Connection */
+.connect-actions {
+    display: flex;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+}
+
+.status-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+}
+
+.status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.status-dot.connected {
+    background: var(--color-connected);
+    box-shadow: 0 0 8px var(--color-connected);
+    animation: pulse 2s infinite;
+}
+
+.status-dot.disconnected {
+    background: var(--color-disconnected);
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* Info Grid */
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 0.75rem;
+}
+
+.info-item {
+    background: rgba(0, 0, 0, 0.15);
+    padding: 0.75rem;
+    border-radius: var(--radius-sm);
+}
+
+.info-item label {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.25rem;
+}
+
+.info-item span {
+    font-weight: 500;
+    font-size: 0.9rem;
+    word-break: break-all;
+}
+
+/* Settings Form */
+.settings-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.form-group {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.form-group > label {
+    font-size: 0.9rem;
+    font-weight: 500;
+    min-width: 120px;
+    flex-shrink: 0;
+}
+
+/* Toggle Switch */
+.toggle-wrapper {
+    position: relative;
+}
+
+.toggle-input {
+    opacity: 0;
+    position: absolute;
+    width: 0;
+    height: 0;
+}
+
+.toggle-label {
+    display: block;
+    width: 52px;
+    height: 28px;
+    background: var(--color-border);
+    border-radius: 14px;
+    cursor: pointer;
+    position: relative;
+    transition: background var(--transition);
+}
+
+.toggle-label::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 22px;
+    height: 22px;
+    background: var(--color-text);
+    border-radius: 50%;
+    transition: transform var(--transition);
+}
+
+.toggle-input:checked + .toggle-label {
+    background: var(--color-primary);
+}
+
+.toggle-input:checked + .toggle-label::after {
+    transform: translateX(24px);
+}
+
+/* Select */
+.form-select {
+    flex: 1;
+    max-width: 250px;
+    padding: 0.5rem 0.75rem;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    color: var(--color-text);
+    font-size: 0.9rem;
+    cursor: pointer;
+    appearance: auto;
+}
+
+.form-select:focus {
+    outline: none;
+    border-color: var(--color-primary);
+}
+
+/* Inputs */
+.form-input {
+    flex: 1;
+    max-width: 250px;
+    padding: 0.5rem 0.75rem;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    color: var(--color-text);
+    font-size: 0.9rem;
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+}
+
+.form-input-small {
+    width: 60px;
+    padding: 0.4rem 0.5rem;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    color: var(--color-text);
+    font-size: 0.85rem;
+    text-align: center;
+}
+
+.form-input-small:focus {
+    outline: none;
+    border-color: var(--color-primary);
+}
+
+/* Color Picker */
+.color-picker-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex: 1;
+    max-width: 350px;
+}
+
+.color-input {
+    width: 48px;
+    height: 36px;
+    border: 2px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    background: none;
+    padding: 2px;
+}
+
+.color-input::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+
+.color-input::-webkit-color-swatch {
+    border: none;
+    border-radius: 4px;
+}
+
+.color-values {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.color-channel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.2rem;
+}
+
+.color-channel label {
+    font-size: 0.7rem;
+    color: var(--color-text-muted);
+    font-weight: 600;
+}
+
+/* Slider */
+.slider-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex: 1;
+    max-width: 300px;
+}
+
+.form-range {
+    flex: 1;
+    -webkit-appearance: none;
+    height: 6px;
+    background: var(--color-border);
+    border-radius: 3px;
+    outline: none;
+}
+
+.form-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--color-primary);
+    cursor: pointer;
+    transition: background var(--transition);
+}
+
+.form-range::-webkit-slider-thumb:hover {
+    background: var(--color-primary-hover);
+}
+
+.range-value {
+    font-size: 0.85rem;
+    font-weight: 600;
+    min-width: 32px;
+    text-align: right;
+    color: var(--color-text-muted);
+}
+
+/* Unsaved Banner */
+.unsaved-banner {
+    background: rgba(253, 203, 110, 0.1);
+    border: 1px solid rgba(253, 203, 110, 0.3);
+    border-radius: var(--radius-sm);
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 1rem;
+    font-size: 0.85rem;
+    color: var(--color-warning);
+    text-align: center;
+}
+
+/* Buttons */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.6rem 1.2rem;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition);
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.btn-icon {
+    font-size: 1rem;
+}
+
+.btn-large {
+    padding: 0.8rem 1.5rem;
+    font-size: 1rem;
+}
+
+.btn-small {
+    padding: 0.3rem 0.6rem;
+    font-size: 0.8rem;
+}
+
+.btn-primary {
+    background: var(--color-primary);
+    color: white;
+}
+.btn-primary:hover:not(:disabled) {
+    background: var(--color-primary-hover);
+}
+
+.btn-secondary {
+    background: var(--color-border);
+    color: var(--color-text);
+}
+.btn-secondary:hover:not(:disabled) {
+    background: var(--color-surface-hover);
+}
+
+.btn-success {
+    background: var(--color-success);
+    color: white;
+}
+.btn-success:hover:not(:disabled) {
+    background: var(--color-success-hover);
+}
+
+.btn-warning {
+    background: rgba(253, 203, 110, 0.2);
+    color: var(--color-warning);
+    border: 1px solid rgba(253, 203, 110, 0.3);
+}
+.btn-warning:hover:not(:disabled) {
+    background: rgba(253, 203, 110, 0.3);
+}
+
+.btn-danger {
+    background: rgba(225, 112, 85, 0.2);
+    color: var(--color-danger);
+    border: 1px solid rgba(225, 112, 85, 0.3);
+}
+.btn-danger:hover:not(:disabled) {
+    background: rgba(225, 112, 85, 0.3);
+}
+
+.btn-ghost {
+    background: transparent;
+    color: var(--color-text-muted);
+}
+.btn-ghost:hover:not(:disabled) {
+    color: var(--color-text);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+/* Action Buttons */
+.action-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+/* Log */
+.log-output {
+    background: rgba(0, 0, 0, 0.25);
+    border-radius: var(--radius-sm);
+    padding: 0.75rem;
+    max-height: 200px;
+    overflow-y: auto;
+    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    font-size: 0.8rem;
+    line-height: 1.6;
+}
+
+.log-entry {
+    padding: 0.1rem 0;
+}
+
+.log-entry.log-info {
+    color: var(--color-info);
+}
+
+.log-entry.log-success {
+    color: var(--color-success);
+}
+
+.log-entry.log-warning {
+    color: var(--color-warning);
+}
+
+.log-entry.log-error {
+    color: var(--color-danger);
+}
+
+.log-entry .log-time {
+    color: var(--color-text-muted);
+    margin-right: 0.5rem;
+}
+
+/* Footer */
+footer {
+    text-align: center;
+    padding: 2rem 1rem;
+    color: var(--color-text-muted);
+    font-size: 0.8rem;
+}
+
+footer a {
+    color: var(--color-primary);
+    text-decoration: none;
+}
+
+footer a:hover {
+    text-decoration: underline;
+}
+
+.footer-note {
+    margin-top: 0.25rem;
+    opacity: 0.6;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+    .header-content h1 {
+        font-size: 1.4rem;
+    }
+
+    .form-group {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .form-select,
+    .form-input,
+    .color-picker-wrapper,
+    .slider-wrapper {
+        max-width: 100%;
+        width: 100%;
+    }
+
+    .action-buttons {
+        flex-direction: column;
+    }
+
+    .action-buttons .btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+/* Modal Dialog */
+.modal-dialog {
+    background: var(--color-surface);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 0;
+    max-width: 420px;
+    width: 90%;
+    box-shadow: 0 8px 48px rgba(0, 0, 0, 0.5);
+}
+
+.modal-dialog::backdrop {
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+}
+
+.modal-content {
+    padding: 1.5rem;
+}
+
+.modal-content h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+}
+
+.modal-content p {
+    font-size: 0.9rem;
+    color: var(--color-text-muted);
+    margin-bottom: 0.75rem;
+    line-height: 1.5;
+}
+
+.modal-content p strong {
+    color: var(--color-warning);
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    margin-top: 1.25rem;
+}
+
+/* ============================================
+   Firmware Update Section
+   ============================================ */
+
+.firmware-description {
+    font-size: 0.9rem;
+    color: var(--color-text-muted);
+    margin-bottom: 1.25rem;
+    line-height: 1.5;
+}
+
+.firmware-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.firmware-step {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+}
+
+.firmware-step.step-active {
+    border-color: var(--color-primary);
+}
+
+.firmware-step.step-complete {
+    border-color: var(--color-success);
+}
+
+.step-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    background: rgba(0, 0, 0, 0.15);
+}
+
+.step-number {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--color-border);
+    font-size: 0.8rem;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.step-active .step-number {
+    background: var(--color-primary);
+}
+
+.step-complete .step-number {
+    background: var(--color-success);
+}
+
+.step-title {
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.step-content {
+    padding: 1rem;
+}
+
+/* File picker */
+.file-picker {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.fw-file-name {
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+    word-break: break-all;
+}
+
+/* File info */
+.fw-file-info {
+    margin-top: 0.75rem;
+    padding: 0.75rem;
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: var(--radius-sm);
+}
+
+.fw-info-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.2rem 0;
+    font-size: 0.8rem;
+}
+
+.fw-info-row span:first-child {
+    color: var(--color-text-muted);
+}
+
+.fw-info-row span:last-child {
+    font-weight: 500;
+    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+}
+
+/* Device info in firmware section */
+.fw-device-info {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+}
+
+/* Progress bar */
+.fw-progress-container {
+    margin-top: 0.75rem;
+}
+
+.fw-progress-bar {
+    height: 18px;
+    background: var(--color-border);
+    border-radius: 9px;
+    overflow: hidden;
+    position: relative;
+}
+
+.fw-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--color-primary), var(--color-success));
+    border-radius: 9px;
+    transition: width 0.15s ease;
+    position: relative;
+}
+
+.fw-progress-fill.error {
+    background: var(--color-danger);
+}
+
+.fw-progress-fill.complete {
+    background: var(--color-success);
+}
+
+.fw-progress-text {
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    text-align: center;
+}
+
+/* Platform note */
+.fw-platform-note {
+    margin-top: 1.25rem;
+    padding: 0.75rem;
+    background: rgba(253, 203, 110, 0.08);
+    border: 1px solid rgba(253, 203, 110, 0.2);
+    border-radius: var(--radius-sm);
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    line-height: 1.5;
+}
+
+.fw-platform-note strong {
+    color: var(--color-warning);
+}
+
+.fw-platform-note a {
+    color: var(--color-primary);
+    text-decoration: none;
+}
+
+.fw-platform-note a:hover {
+    text-decoration: underline;
+}

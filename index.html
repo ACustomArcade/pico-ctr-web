@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PicoCTR Web Configurator</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎮</text></svg>">
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <h1>🎮 PicoCTR Web Configurator</h1>
+            <p class="subtitle">Configure your PicoCTR arcade controller via USB</p>
+        </div>
+    </header>
+
+    <main>
+        <!-- Browser Support Warning -->
+        <div id="browser-warning" class="card warning-card" style="display: none;">
+            <h2>⚠️ Browser Not Supported</h2>
+            <p>WebHID is required for USB communication. Please use <strong>Google Chrome</strong> or <strong>Microsoft Edge</strong> (version 89+).</p>
+        </div>
+
+        <!-- Connection Section -->
+        <section id="connection-section" class="card">
+            <h2>Connect Device</h2>
+            <p>Plug in your PicoCTR controller and click the button below to connect.</p>
+            <div class="connect-actions">
+                <button id="btn-connect" class="btn btn-primary btn-large">
+                    <span class="btn-icon">🔌</span>
+                    Connect PicoCTR
+                </button>
+                <button id="btn-disconnect" class="btn btn-secondary" style="display: none;">
+                    Disconnect
+                </button>
+            </div>
+            <div id="connection-status" class="status-bar">
+                <span class="status-dot disconnected"></span>
+                <span class="status-text">Not connected</span>
+            </div>
+        </section>
+
+        <!-- Device Info Section -->
+        <section id="device-info-section" class="card" style="display: none;">
+            <h2>Device Information</h2>
+            <div class="info-grid">
+                <div class="info-item">
+                    <label>Board</label>
+                    <span id="info-board">—</span>
+                </div>
+                <div class="info-item">
+                    <label>Firmware Version</label>
+                    <span id="info-version">—</span>
+                </div>
+                <div class="info-item">
+                    <label>Build Type</label>
+                    <span id="info-build-type">—</span>
+                </div>
+                <div class="info-item">
+                    <label>USB ID</label>
+                    <span id="info-usb-id">—</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Settings Section -->
+        <section id="settings-section" class="card" style="display: none;">
+            <h2>RGB Settings</h2>
+            <div id="unsaved-banner" class="unsaved-banner" style="display: none;">
+                <span>⚡ You have unsaved changes</span>
+            </div>
+
+            <div class="settings-form">
+                <!-- RGB Enable -->
+                <div class="form-group">
+                    <label for="setting-enable_rgb">RGB Enabled</label>
+                    <div class="toggle-wrapper">
+                        <input type="checkbox" id="setting-enable_rgb" class="toggle-input" data-field="enable_rgb">
+                        <label for="setting-enable_rgb" class="toggle-label"></label>
+                    </div>
+                </div>
+
+                <!-- Animation -->
+                <div class="form-group">
+                    <label for="setting-rgb_animation">Animation</label>
+                    <select id="setting-rgb_animation" class="form-select" data-field="rgb_animation">
+                        <!-- Populated from config -->
+                    </select>
+                </div>
+
+                <!-- Color Picker -->
+                <div class="form-group" id="color-group">
+                    <label>Solid Color</label>
+                    <div class="color-picker-wrapper">
+                        <input type="color" id="setting-color-picker" class="color-input">
+                        <div class="color-values">
+                            <div class="color-channel">
+                                <label for="setting-rgb_color_r">R</label>
+                                <input type="number" id="setting-rgb_color_r" class="form-input-small" min="0" max="255" data-field="rgb_color_r">
+                            </div>
+                            <div class="color-channel">
+                                <label for="setting-rgb_color_g">G</label>
+                                <input type="number" id="setting-rgb_color_g" class="form-input-small" min="0" max="255" data-field="rgb_color_g">
+                            </div>
+                            <div class="color-channel">
+                                <label for="setting-rgb_color_b">B</label>
+                                <input type="number" id="setting-rgb_color_b" class="form-input-small" min="0" max="255" data-field="rgb_color_b">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- LED Count -->
+                <div class="form-group">
+                    <label for="setting-led_count">LED Count</label>
+                    <input type="number" id="setting-led_count" class="form-input" min="1" max="255" data-field="led_count">
+                </div>
+
+                <!-- Brightness -->
+                <div class="form-group">
+                    <label for="setting-led_brightness">Brightness</label>
+                    <div class="slider-wrapper">
+                        <input type="range" id="setting-led_brightness" class="form-range" min="0" max="255" data-field="led_brightness">
+                        <span id="brightness-value" class="range-value">0</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Actions Section -->
+        <section id="actions-section" class="card" style="display: none;">
+            <h2>Actions</h2>
+            <div class="action-buttons">
+                <button id="btn-apply" class="btn btn-primary" title="Send settings to device (preview without saving)">
+                    <span class="btn-icon">⚡</span> Apply
+                </button>
+                <button id="btn-save" class="btn btn-success" title="Save current settings to flash memory">
+                    <span class="btn-icon">💾</span> Save to Flash
+                </button>
+                <button id="btn-read" class="btn btn-secondary" title="Re-read settings from device">
+                    <span class="btn-icon">🔄</span> Refresh
+                </button>
+                <button id="btn-reset" class="btn btn-warning" title="Reset to factory defaults">
+                    <span class="btn-icon">🔧</span> Reset Defaults
+                </button>
+                <button id="btn-bootsel" class="btn btn-danger" title="Enter BOOTSEL mode (device will disconnect and appear as USB drive)">
+                    <span class="btn-icon">📦</span> Enter BOOTSEL Mode
+                </button>
+            </div>
+        </section>
+
+        <!-- Firmware Update Section -->
+        <section id="firmware-section" class="card" style="display: none;">
+            <h2>Firmware Update</h2>
+            <p class="firmware-description">
+                Flash new firmware via the PICOBOOT protocol over WebUSB.
+                The device must be in BOOTSEL mode (hold BOOTSEL button while plugging in, or use the button above).
+            </p>
+
+            <div class="firmware-steps">
+                <!-- Step 1: Connect BOOTSEL device -->
+                <div class="firmware-step" id="fw-step-connect">
+                    <div class="step-header">
+                        <span class="step-number">1</span>
+                        <span class="step-title">Connect device in BOOTSEL mode</span>
+                    </div>
+                    <div class="step-content">
+                        <button id="btn-fw-connect" class="btn btn-primary">
+                            <span class="btn-icon">🔌</span> Connect BOOTSEL Device
+                        </button>
+                        <div id="fw-device-info" class="fw-device-info" style="display: none;">
+                            <span class="status-dot connected"></span>
+                            <span id="fw-device-name">—</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 2: Select UF2 file -->
+                <div class="firmware-step" id="fw-step-file">
+                    <div class="step-header">
+                        <span class="step-number">2</span>
+                        <span class="step-title">Select UF2 firmware file</span>
+                    </div>
+                    <div class="step-content">
+                        <div class="file-picker">
+                            <input type="file" id="fw-file-input" accept=".uf2" style="display: none;">
+                            <button id="btn-fw-browse" class="btn btn-secondary" disabled>
+                                <span class="btn-icon">📁</span> Choose .uf2 File
+                            </button>
+                            <span id="fw-file-name" class="fw-file-name">No file selected</span>
+                        </div>
+                        <div id="fw-file-info" class="fw-file-info" style="display: none;">
+                            <div class="fw-info-row"><span>Target:</span><span id="fw-info-target">—</span></div>
+                            <div class="fw-info-row"><span>Blocks:</span><span id="fw-info-blocks">—</span></div>
+                            <div class="fw-info-row"><span>Size:</span><span id="fw-info-size">—</span></div>
+                            <div class="fw-info-row"><span>Address range:</span><span id="fw-info-addr">—</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 3: Flash -->
+                <div class="firmware-step" id="fw-step-flash">
+                    <div class="step-header">
+                        <span class="step-number">3</span>
+                        <span class="step-title">Flash firmware</span>
+                    </div>
+                    <div class="step-content">
+                        <button id="btn-fw-flash" class="btn btn-danger btn-large" disabled>
+                            <span class="btn-icon">⚡</span> Flash Firmware
+                        </button>
+                        <div id="fw-progress-container" class="fw-progress-container" style="display: none;">
+                            <div class="fw-progress-bar">
+                                <div id="fw-progress-fill" class="fw-progress-fill" style="width: 0%"></div>
+                            </div>
+                            <div id="fw-progress-text" class="fw-progress-text">Waiting...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="fw-platform-note" class="fw-platform-note">
+                <strong>Note:</strong> On Windows, you may need to install a WinUSB driver for the RP2040 BOOTSEL device
+                using <a href="https://zadig.akeo.ie/" target="_blank" rel="noopener">Zadig</a>.
+                Linux and macOS typically work without additional drivers.
+            </div>
+        </section>
+
+        <!-- Log Section -->
+        <section id="log-section" class="card">
+            <h2>
+                Activity Log
+                <button id="btn-clear-log" class="btn btn-small btn-ghost">Clear</button>
+            </h2>
+            <div id="log-output" class="log-output">
+                <div class="log-entry log-info">Ready. Connect a PicoCTR device to begin.</div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p>PicoCTR Web Configurator &mdash; <a href="https://github.com/ACustomArcade/amgearco-ctr" target="_blank">Firmware Source</a></p>
+        <p class="footer-note">Requires Chrome or Edge with WebHID &amp; WebUSB support</p>
+    </footer>
+
+    <!-- Apply Confirmation Dialog -->
+    <dialog id="apply-dialog" class="modal-dialog">
+        <div class="modal-content">
+            <h3>Apply Settings?</h3>
+            <p>Settings will be applied to the device immediately for preview, but will <strong>revert when the device restarts</strong>.</p>
+            <p>To make changes permanent, use <strong>Save to Flash</strong> after applying.</p>
+            <div class="modal-actions">
+                <button id="apply-dialog-cancel" class="btn btn-secondary">Cancel</button>
+                <button id="apply-dialog-confirm" class="btn btn-primary">Apply</button>
+            </div>
+        </div>
+    </dialog>
+
+    <script src="js/picoboot.js"></script>
+    <script src="js/webhid.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
