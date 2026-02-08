@@ -55,7 +55,6 @@
         brightnessValue: $('#brightness-value'),
         // Action buttons
         btnApply: $('#btn-apply'),
-        btnSave: $('#btn-save'),
         btnRead: $('#btn-read'),
         btnReset: $('#btn-reset'),
         btnBootsel: $('#btn-bootsel'),
@@ -65,6 +64,7 @@
         applyDialog: $('#apply-dialog'),
         applyDialogCancel: $('#apply-dialog-cancel'),
         applyDialogConfirm: $('#apply-dialog-confirm'),
+        applyDialogSave: $('#apply-dialog-save'),
         // Color group (for show/hide based on animation)
         colorGroup: $('#color-group'),
         // Firmware update
@@ -144,7 +144,7 @@
         dom.actionsSection.style.display = isConnected ? '' : 'none';
 
         // Disable action buttons when not connected
-        [dom.btnApply, dom.btnSave, dom.btnRead, dom.btnReset, dom.btnBootsel].forEach(btn => {
+        [dom.btnApply, dom.btnRead, dom.btnReset, dom.btnBootsel].forEach(btn => {
             btn.disabled = !isConnected;
         });
     }
@@ -947,7 +947,10 @@
             dom.applyDialog.close();
             applySettings();
         });
-        dom.btnSave.addEventListener('click', saveSettings);
+        dom.applyDialogSave.addEventListener('click', () => {
+            dom.applyDialog.close();
+            saveSettings();
+        });
         dom.btnRead.addEventListener('click', readSettings);
         dom.btnReset.addEventListener('click', resetSettings);
         dom.btnBootsel.addEventListener('click', enterBootsel);

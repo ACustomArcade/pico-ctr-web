@@ -141,9 +141,6 @@
                 <button id="btn-apply" class="btn btn-primary" title="Send settings to device (preview without saving)">
                     <span class="btn-icon">⚡</span> Apply
                 </button>
-                <button id="btn-save" class="btn btn-success" title="Save current settings to flash memory">
-                    <span class="btn-icon">💾</span> Save to Flash
-                </button>
                 <button id="btn-read" class="btn btn-secondary" title="Re-read settings from device">
                     <span class="btn-icon">🔄</span> Refresh
                 </button>
@@ -287,12 +284,14 @@
     <!-- Apply Confirmation Dialog -->
     <dialog id="apply-dialog" class="modal-dialog">
         <div class="modal-content">
-            <h3>Apply Settings?</h3>
-            <p>Settings will be applied to the device immediately for preview, but will <strong>revert when the device restarts</strong>.</p>
-            <p>To make changes permanent, use <strong>Save to Flash</strong> after applying.</p>
+            <h3>Apply Settings</h3>
+            <p>Choose how to apply your changes:</p>
+            <p><strong>Preview</strong> &mdash; applies settings immediately, but they will revert when the device restarts.</p>
+            <p><strong>Save to Flash</strong> &mdash; applies settings and saves them permanently.</p>
             <div class="modal-actions">
                 <button id="apply-dialog-cancel" class="btn btn-secondary">Cancel</button>
-                <button id="apply-dialog-confirm" class="btn btn-primary">Apply</button>
+                <button id="apply-dialog-confirm" class="btn btn-primary">Preview</button>
+                <button id="apply-dialog-save" class="btn btn-success">Save to Flash</button>
             </div>
         </div>
     </dialog>

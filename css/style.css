@@ -594,6 +594,8 @@ footer a:hover {
     max-width: 420px;
     width: 90%;
     box-shadow: 0 8px 48px rgba(0, 0, 0, 0.5);
+    inset: 0;
+    margin: auto;
 }
 
 .modal-dialog::backdrop {
