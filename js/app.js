@@ -19,6 +19,8 @@
     let picoboot = null;
     let selectedUF2 = null;  // { data: ArrayBuffer, info: object, name: string }
     let isFlashing = false;
+    let latestRelease = null; // cached GitHub release data
+    let fwSource = 'github';  // 'github' or 'local'
 
     // ========================================================================
     // DOM References
@@ -59,6 +61,7 @@
         btnReset: $('#btn-reset'),
         btnBootsel: $('#btn-bootsel'),
         btnClearLog: $('#btn-clear-log'),
+        btnBootstrap: $('#btn-bootstrap'),
         // Apply confirmation dialog
         applyDialog: $('#apply-dialog'),
         applyDialogCancel: $('#apply-dialog-cancel'),
@@ -78,6 +81,13 @@
         fwInfoBlocks: $('#fw-info-blocks'),
         fwInfoSize: $('#fw-info-size'),
         fwInfoAddr: $('#fw-info-addr'),
+        fwInfoBoard: $('#fw-info-board'),
+        fwInfoVersion: $('#fw-info-version'),
+        fwInfoGit: $('#fw-info-git'),
+        fwInfoRowBoard: $('#fw-info-row-board'),
+        fwInfoRowVersion: $('#fw-info-row-version'),
+        fwInfoRowGit: $('#fw-info-row-git'),
+        fwValidationWarning: $('#fw-validation-warning'),
         btnFwFlash: $('#btn-fw-flash'),
         fwProgressContainer: $('#fw-progress-container'),
         fwProgressFill: $('#fw-progress-fill'),
@@ -85,6 +95,20 @@
         fwStepConnect: $('#fw-step-connect'),
         fwStepFile: $('#fw-step-file'),
         fwStepFlash: $('#fw-step-flash'),
+        // Firmware source tabs
+        fwTabGithub: $('#fw-tab-github'),
+        fwTabLocal: $('#fw-tab-local'),
+        fwPanelGithub: $('#fw-panel-github'),
+        fwPanelLocal: $('#fw-panel-local'),
+        fwReleaseLoading: $('#fw-release-loading'),
+        fwReleaseError: $('#fw-release-error'),
+        fwReleaseErrorMsg: $('#fw-release-error-msg'),
+        fwReleaseFallbackLink: $('#fw-release-fallback-link'),
+        fwReleaseContent: $('#fw-release-content'),
+        fwReleaseTag: $('#fw-release-tag'),
+        fwReleaseDate: $('#fw-release-date'),
+        fwReleaseLink: $('#fw-release-link'),
+        fwReleaseList: $('#fw-release-list'),
     };
 
     // ========================================================================
@@ -355,7 +379,7 @@
     }
 
     async function enterBootsel() {
-        if (!confirm('Enter BOOTSEL mode?\n\nThe device will disconnect and reboot into firmware update mode.\nYou can then flash a new .uf2 firmware via the Firmware Update section below.')) {
+        if (!confirm('Update firmware?\n\nThe device will disconnect and reboot into firmware update mode.\nYou can then flash a new .uf2 firmware via the Firmware Update section below.')) {
             return;
         }
         try {
@@ -379,6 +403,17 @@
         resetFirmwareUI();
     }
 
+    /**
+     * Bootstrap mode: for brand-new devices already in BOOTSEL mode.
+     * Shows the firmware section and immediately opens the WebUSB device picker.
+     */
+    async function handleBootstrap() {
+        log('Bootstrap mode: looking for device in BOOTSEL mode...', 'info');
+        showFirmwareSection();
+        // Immediately trigger the BOOTSEL device connection
+        await handleFwConnect();
+    }
+
     function hideFirmwareSection() {
         dom.firmwareSection.style.display = 'none';
         resetFirmwareUI();
@@ -391,9 +426,22 @@
 
         // Reset file step
         dom.fwFileName.textContent = 'No file selected';
+        dom.fwFileName.classList.remove('fw-file-hint');
         dom.fwFileInfo.style.display = 'none';
+        dom.fwValidationWarning.style.display = 'none';
         dom.btnFwBrowse.disabled = true;
         selectedUF2 = null;
+
+        // Reset source tabs
+        dom.fwTabGithub.disabled = true;
+        dom.fwTabLocal.disabled = true;
+        switchFwSource('github');
+
+        // Reset release panel
+        dom.fwReleaseLoading.style.display = '';
+        dom.fwReleaseError.style.display = 'none';
+        dom.fwReleaseContent.style.display = 'none';
+        dom.fwReleaseList.innerHTML = '';
 
         // Reset flash step
         dom.btnFwFlash.disabled = true;
@@ -412,6 +460,20 @@
             picoboot.disconnect().catch(() => {});
             picoboot = null;
         }
+    }
+
+    function switchFwSource(source) {
+        fwSource = source;
+        dom.fwTabGithub.classList.toggle('active', source === 'github');
+        dom.fwTabLocal.classList.toggle('active', source === 'local');
+        dom.fwPanelGithub.style.display = source === 'github' ? '' : 'none';
+        dom.fwPanelLocal.style.display = source === 'local' ? '' : 'none';
+        // Clear selection when switching
+        dom.fwFileInfo.style.display = 'none';
+        dom.fwValidationWarning.style.display = 'none';
+        dom.btnFwFlash.disabled = true;
+        selectedUF2 = null;
+        setFirmwareStepState(dom.fwStepFlash, '');
     }
 
     function setFirmwareStepState(stepEl, state) {
@@ -436,10 +498,17 @@
             dom.fwDeviceName.textContent = name;
             dom.btnFwBrowse.disabled = false;
 
+            // Enable source tabs
+            dom.fwTabGithub.disabled = false;
+            dom.fwTabLocal.disabled = false;
+
             setFirmwareStepState(dom.fwStepConnect, 'complete');
             setFirmwareStepState(dom.fwStepFile, 'active');
 
             log(`BOOTSEL device connected: ${name}`, 'success');
+
+            // Start loading GitHub releases in background
+            loadGitHubReleases();
 
             // Handle disconnection
             picoboot.onDisconnect(() => {
@@ -458,13 +527,67 @@
         }
     }
 
+    /**
+     * Display UF2 info (binary info + technical details) in the firmware info panel.
+     * Shared by both local file and GitHub download flows.
+     */
+    function displayUF2Info(info, name) {
+        // Binary info rows
+        if (info.board) {
+            dom.fwInfoBoard.textContent = info.board;
+            dom.fwInfoRowBoard.style.display = '';
+        } else {
+            dom.fwInfoRowBoard.style.display = 'none';
+        }
+        if (info.version) {
+            dom.fwInfoVersion.textContent = info.version;
+            dom.fwInfoRowVersion.style.display = '';
+        } else {
+            dom.fwInfoRowVersion.style.display = 'none';
+        }
+        if (info.git) {
+            dom.fwInfoGit.textContent = info.git;
+            dom.fwInfoRowGit.style.display = '';
+        } else {
+            dom.fwInfoRowGit.style.display = 'none';
+        }
+
+        // Technical info
+        dom.fwInfoTarget.textContent = info.familyId;
+        dom.fwInfoBlocks.textContent = info.blocks.toString();
+        dom.fwInfoSize.textContent = formatBytes(info.totalSize);
+        dom.fwInfoAddr.textContent = `${info.minAddr} – ${info.maxAddr}`;
+        dom.fwFileInfo.style.display = '';
+
+        // Reject non-PicoCTR firmware
+        if (!info.isPicoCTR) {
+            dom.fwFileInfo.style.display = 'none';
+            dom.fwValidationWarning.style.display = '';
+            log(`Error: "${name}" does not appear to be PicoCTR firmware`, 'error');
+            return null;
+        }
+
+        dom.fwValidationWarning.style.display = 'none';
+
+        // Build summary string
+        const parts = [];
+        if (info.board) parts.push(info.board);
+        if (info.version) parts.push(`v${info.version}`);
+        parts.push(`${info.blocks} blocks`);
+        parts.push(formatBytes(info.totalSize));
+        parts.push(info.familyId);
+        return parts.join(', ');
+    }
+
     function handleFwFileSelect(event) {
         const file = event.target.files[0];
         if (!file) return;
 
         dom.fwFileName.textContent = file.name;
+        dom.fwFileName.classList.remove('fw-file-hint');
         selectedUF2 = null;
         dom.fwFileInfo.style.display = 'none';
+        dom.fwValidationWarning.style.display = 'none';
         dom.btnFwFlash.disabled = true;
 
         const reader = new FileReader();
@@ -473,19 +596,20 @@
                 const data = reader.result;
                 const info = PicobootConnection.getUF2Info(data);
 
-                selectedUF2 = { data, info, name: file.name };
+                const summary = displayUF2Info(info, file.name);
+                if (!summary) {
+                    // Not PicoCTR firmware — refuse to flash
+                    selectedUF2 = null;
+                    return;
+                }
 
-                dom.fwInfoTarget.textContent = info.familyId;
-                dom.fwInfoBlocks.textContent = info.blocks.toString();
-                dom.fwInfoSize.textContent = formatBytes(info.totalSize);
-                dom.fwInfoAddr.textContent = `${info.minAddr} – ${info.maxAddr}`;
-                dom.fwFileInfo.style.display = '';
+                selectedUF2 = { data, info, name: file.name };
                 dom.btnFwFlash.disabled = false;
 
                 setFirmwareStepState(dom.fwStepFile, 'complete');
                 setFirmwareStepState(dom.fwStepFlash, 'active');
 
-                log(`UF2 loaded: ${file.name} (${info.blocks} blocks, ${formatBytes(info.totalSize)}, ${info.familyId})`, 'success');
+                log(`UF2 loaded: ${file.name} (${summary})`, 'success');
             } catch (err) {
                 log(`Invalid UF2 file: ${err.message}`, 'error');
                 dom.fwFileName.textContent = `Error: ${err.message}`;
@@ -496,6 +620,100 @@
             log('Failed to read file', 'error');
         };
         reader.readAsArrayBuffer(file);
+    }
+
+    // ====================================================
+    // GitHub Releases
+    // ====================================================
+
+    async function loadGitHubReleases() {
+        dom.fwReleaseLoading.style.display = '';
+        dom.fwReleaseError.style.display = 'none';
+        dom.fwReleaseContent.style.display = 'none';
+
+        try {
+            // Load manifest from the local site (same origin — no CORS issues)
+            const manifest = await PicoCTRFirmwareReleases.loadLocalManifest();
+
+            // Fetch release metadata from GitHub API (JSON endpoint has CORS)
+            latestRelease = await PicoCTRFirmwareReleases.fetchLatestRelease(manifest);
+
+            if (latestRelease.assets.length === 0) {
+                throw new Error('No firmware files found in the latest release');
+            }
+
+            // Populate release header
+            dom.fwReleaseTag.textContent = latestRelease.tag;
+            dom.fwReleaseDate.textContent = new Date(latestRelease.publishedAt).toLocaleDateString();
+            dom.fwReleaseLink.href = latestRelease.htmlUrl;
+
+            // Build firmware list, grouped by category
+            dom.fwReleaseList.innerHTML = '';
+
+            // Sort: consumer first, then standard, then development; non-legacy before legacy
+            const categoryOrder = { consumer: 0, standard: 1, development: 2 };
+            const sorted = [...latestRelease.assets].sort((a, b) => {
+                const catA = categoryOrder[a.category] ?? 9;
+                const catB = categoryOrder[b.category] ?? 9;
+                if (catA !== catB) return catA - catB;
+                if (a.isLegacy !== b.isLegacy) return a.isLegacy ? 1 : -1;
+                return a.displayName.localeCompare(b.displayName);
+            });
+
+            let lastCategory = null;
+            for (const asset of sorted) {
+                // Add category separator
+                if (asset.category !== lastCategory) {
+                    lastCategory = asset.category;
+                    const label = { consumer: 'AtGames Consoles', standard: 'Standard', development: 'Development' }[asset.category] || asset.category;
+                    const sep = document.createElement('div');
+                    sep.className = 'fw-release-category';
+                    sep.textContent = label;
+                    dom.fwReleaseList.appendChild(sep);
+                }
+
+                const item = document.createElement('button');
+                item.className = 'fw-release-item' + (asset.isLegacy ? ' fw-release-item-legacy' : '');
+                item.innerHTML = `
+                    <div class="fw-release-item-info">
+                        <span class="fw-release-item-name">${asset.displayName}</span>
+                        ${asset.description ? `<span class="fw-release-item-desc">${asset.description}</span>` : ''}
+                    </div>
+                    <span class="fw-release-item-meta">${formatBytes(asset.size)}</span>
+                `;
+                item.addEventListener('click', () => handleGitHubAssetSelect(asset, item));
+                dom.fwReleaseList.appendChild(item);
+            }
+
+            dom.fwReleaseLoading.style.display = 'none';
+            dom.fwReleaseContent.style.display = '';
+
+            const src = latestRelease.hasManifest ? 'manifest' : 'fallback map';
+            log(`Loaded ${latestRelease.assets.length} firmware files from release ${latestRelease.tag} (${src})`, 'success');
+        } catch (err) {
+            dom.fwReleaseLoading.style.display = 'none';
+            dom.fwReleaseErrorMsg.textContent = err.message;
+            dom.fwReleaseError.style.display = '';
+            log(`Failed to load GitHub releases: ${err.message}`, 'error');
+        }
+    }
+
+    async function handleGitHubAssetSelect(asset, itemEl) {
+        // Deselect all items
+        dom.fwReleaseList.querySelectorAll('.fw-release-item').forEach(el => el.classList.remove('selected'));
+        itemEl.classList.add('selected');
+
+        // Trigger native browser download (bypasses CORS — uses <a> navigation)
+        log(`Downloading ${asset.displayName} (${asset.name})...`);
+        PicoCTRFirmwareReleases.triggerNativeDownload(asset.browserUrl, asset.name);
+
+        // Switch to Local File tab so user can select the downloaded file
+        switchFwSource('local');
+        dom.btnFwBrowse.disabled = false;
+        dom.fwFileName.textContent = `⬇️ Downloading ${asset.name} — select it from your Downloads folder`;
+        dom.fwFileName.classList.add('fw-file-hint');
+
+        log(`"${asset.name}" download started. Select the downloaded file using the file picker to continue.`, 'info');
     }
 
     function formatBytes(bytes) {
@@ -515,6 +733,8 @@
         dom.btnFwFlash.disabled = true;
         dom.btnFwConnect.disabled = true;
         dom.btnFwBrowse.disabled = true;
+        dom.fwTabGithub.disabled = true;
+        dom.fwTabLocal.disabled = true;
         dom.fwProgressContainer.style.display = '';
         dom.fwProgressFill.className = 'fw-progress-fill';
 
@@ -670,6 +890,11 @@
         dom.btnFwBrowse.addEventListener('click', () => dom.fwFileInput.click());
         dom.fwFileInput.addEventListener('change', handleFwFileSelect);
         dom.btnFwFlash.addEventListener('click', handleFwFlash);
+        dom.btnBootstrap.addEventListener('click', handleBootstrap);
+
+        // Firmware source tab handlers
+        dom.fwTabGithub.addEventListener('click', () => switchFwSource('github'));
+        dom.fwTabLocal.addEventListener('click', () => switchFwSource('local'));
 
         // Set initial state
         setConnected(false);

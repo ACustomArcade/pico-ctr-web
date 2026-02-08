@@ -1,0 +1,75 @@
+{
+  "_comment": "PicoCTR firmware manifest — upload this file as a release asset alongside the .uf2 files",
+  "firmware": [
+    {
+      "file": "pico-ctr-alu-mini.uf2",
+      "name": "AtGames Legends Ultimate Mini",
+      "description": "For ALU Mini consoles",
+      "category": "consumer"
+    },
+    {
+      "file": "pico-ctr-alu-mini-legacy.uf2",
+      "name": "AtGames Legends Ultimate Mini (Legacy)",
+      "description": "For ALU Mini consoles — legacy boards",
+      "category": "consumer",
+      "legacy": true
+    },
+    {
+      "file": "pico-ctr-alu.uf2",
+      "name": "AtGames Legends Ultimate 1.1/1.2",
+      "description": "For ALU 1.1 and 1.2 consoles",
+      "category": "consumer"
+    },
+    {
+      "file": "pico-ctr-alu-legacy.uf2",
+      "name": "AtGames Legends Ultimate 1.1/1.2 (Legacy)",
+      "description": "For ALU 1.1 and 1.2 consoles — legacy boards",
+      "category": "consumer",
+      "legacy": true
+    },
+    {
+      "file": "pico-ctr-gamer-mini.uf2",
+      "name": "AtGames Legends Gamer Mini",
+      "description": "For Legends Gamer Mini consoles",
+      "category": "consumer"
+    },
+    {
+      "file": "pico-ctr-gamer-mini-legacy.uf2",
+      "name": "AtGames Legends Gamer Mini (Legacy)",
+      "description": "For Legends Gamer Mini consoles — legacy boards",
+      "category": "consumer",
+      "legacy": true
+    },
+    {
+      "file": "pico-ctr-gamer-pro.uf2",
+      "name": "AtGames Legends Gamer Pro",
+      "description": "For Legends Gamer Pro consoles",
+      "category": "consumer"
+    },
+    {
+      "file": "pico-ctr-gamer-pro-legacy.uf2",
+      "name": "AtGames Legends Gamer Pro (Legacy)",
+      "description": "For Legends Gamer Pro consoles — legacy boards",
+      "category": "consumer",
+      "legacy": true
+    },
+    {
+      "file": "pico-ctr.uf2",
+      "name": "Standard PicoCTR",
+      "description": "Default PicoCTR firmware for custom builds",
+      "category": "standard"
+    },
+    {
+      "file": "pico-ctr-tester.uf2",
+      "name": "PicoCTR Development Board",
+      "description": "For PicoCTR development/tester boards",
+      "category": "development"
+    },
+    {
+      "file": "pico-ctr-tester-atg.uf2",
+      "name": "PicoCTR Development Board (AtGames mode)",
+      "description": "For PicoCTR development/tester boards in AtGames mode",
+      "category": "development"
+    }
+  ]
+}

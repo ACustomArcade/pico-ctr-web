@@ -489,10 +489,205 @@ class PicobootConnection {
         return { blocks, familyId, totalBlocks: numBlocks };
     }
 
+    // ========================================================================
+    // Binary Info Extraction (from Pico SDK bi_decl() data embedded in UF2)
+    // ========================================================================
+
+    // Binary info markers from Pico SDK
+    static BINARY_INFO_MARKER_START = 0x7188EBF2;
+    static BINARY_INFO_MARKER_END   = 0xE71AA390;
+
+    // Binary info IDs
+    static BINARY_INFO_ID_RP_PROGRAM_VERSION_STRING = 0x11A9BC3A;
+    static BINARY_INFO_TAG_RP = 0x5052; // "RP" in little-endian
+
     /**
-     * Get human-readable info about a UF2 file.
+     * Extract PicoCTR binary info from UF2 payload data.
+     * Scans UF2 block payloads for embedded board name, git version, and
+     * firmware version strings placed by the Pico SDK bi_decl() macros.
+     *
+     * Reference: amgearco-ctr/tools/picoctr_config.cpp extractVersionFromUF2()
+     *            and extractBoardFromUF2()
+     *
+     * @param {Array<{addr: number, data: Uint8Array}>} blocks - Parsed UF2 blocks
+     * @returns {{ board: string|null, version: string|null, git: string|null, isPicoCTR: boolean }}
+     */
+    static extractBinaryInfo(blocks) {
+        let board = null;
+        let version = null;
+        let git = null;
+
+        for (const block of blocks) {
+            const payload = block.data;
+            const len = payload.length;
+
+            // --- Scan for "Board: " and "Git: " strings ---
+            for (let i = 0; i < len - 7; i++) {
+                // Check for "Board: " (0x42 0x6F 0x61 0x72 0x64 0x3A 0x20)
+                if (!board &&
+                    payload[i]     === 0x42 && // B
+                    payload[i + 1] === 0x6F && // o
+                    payload[i + 2] === 0x61 && // a
+                    payload[i + 3] === 0x72 && // r
+                    payload[i + 4] === 0x64 && // d
+                    payload[i + 5] === 0x3A && // :
+                    payload[i + 6] === 0x20) { // space
+                    // Extract board name: alphanumeric, _, -
+                    let j = i + 7;
+                    // skip extra whitespace
+                    while (j < len && (payload[j] === 0x20 || payload[j] === 0x09)) j++;
+                    let name = '';
+                    while (j < len) {
+                        const c = payload[j];
+                        if ((c >= 0x41 && c <= 0x5A) ||  // A-Z
+                            (c >= 0x61 && c <= 0x7A) ||  // a-z
+                            (c >= 0x30 && c <= 0x39) ||  // 0-9
+                            c === 0x5F || c === 0x2D) {  // _ -
+                            name += String.fromCharCode(c);
+                            j++;
+                        } else {
+                            break;
+                        }
+                    }
+                    if (name.length > 0) {
+                        board = name;
+                    }
+                }
+
+                // Check for "Git: " (0x47 0x69 0x74 0x3A 0x20)
+                if (!git && i < len - 5 &&
+                    payload[i]     === 0x47 && // G
+                    payload[i + 1] === 0x69 && // i
+                    payload[i + 2] === 0x74 && // t
+                    payload[i + 3] === 0x3A && // :
+                    payload[i + 4] === 0x20) { // space
+                    let j = i + 5;
+                    while (j < len && (payload[j] === 0x20 || payload[j] === 0x09)) j++;
+                    let ver = '';
+                    while (j < len && ver.length < 32) {
+                        const c = payload[j];
+                        // version chars: alphanumeric, ., -, +, _
+                        if ((c >= 0x30 && c <= 0x39) || // 0-9
+                            (c >= 0x41 && c <= 0x5A) || // A-Z
+                            (c >= 0x61 && c <= 0x7A) || // a-z
+                            c === 0x2E || c === 0x2D || c === 0x2B || c === 0x5F) {
+                            ver += String.fromCharCode(c);
+                            j++;
+                        } else {
+                            break;
+                        }
+                    }
+                    if (ver.length > 0) {
+                        git = ver;
+                    }
+                }
+            }
+
+            // --- Scan for binary info markers to find program version ---
+            if (!version && len >= 20) {
+                const wordCount = Math.floor(len / 4);
+                const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
+
+                for (let w = 0; w + 4 < wordCount; w++) {
+                    const word = view.getUint32(w * 4, true);
+                    if (word === PicobootConnection.BINARY_INFO_MARKER_START) {
+                        // Check if nearby entry has version string ID
+                        if (w + 2 < wordCount) {
+                            const id = view.getUint32((w + 2) * 4, true);
+                            if (id === PicobootConnection.BINARY_INFO_ID_RP_PROGRAM_VERSION_STRING) {
+                                // Search nearby area for version pattern X.Y.Z
+                                const searchStart = Math.max(0, w * 4 - 32);
+                                const searchEnd = Math.min(len, w * 4 + 64);
+
+                                for (let si = searchStart; si < searchEnd - 5; si++) {
+                                    const c = payload[si];
+                                    // Look for digit.digit pattern
+                                    if (c >= 0x30 && c <= 0x39) { // starts with digit
+                                        const next = payload[si + 1];
+                                        if (next === 0x2E || (next >= 0x30 && next <= 0x39)) { // . or digit
+                                            let ver = '';
+                                            let k = si;
+                                            while (k < searchEnd && ver.length < 20) {
+                                                const vc = payload[k];
+                                                if ((vc >= 0x30 && vc <= 0x39) || vc === 0x2E) { // digit or .
+                                                    ver += String.fromCharCode(vc);
+                                                    k++;
+                                                } else {
+                                                    break;
+                                                }
+                                            }
+                                            // Validate X.Y.Z format
+                                            if (ver.length >= 5) {
+                                                const parts = ver.split('.');
+                                                if (parts.length >= 2 && parts.length <= 4 &&
+                                                    parts.every(p => p.length > 0 && !isNaN(p))) {
+                                                    version = ver;
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Early exit if we found everything
+            if (board && version && git) break;
+        }
+
+        // Fallback: scan all blocks for X.Y.Z version pattern if binary info didn't find it
+        if (!version) {
+            for (const block of blocks) {
+                const payload = block.data;
+                const len = payload.length;
+                for (let i = 0; i < len - 5; i++) {
+                    if (payload[i] >= 0x30 && payload[i] <= 0x39 &&       // d
+                        payload[i + 1] === 0x2E &&                         // .
+                        payload[i + 2] >= 0x30 && payload[i + 2] <= 0x39 && // d
+                        payload[i + 3] === 0x2E &&                         // .
+                        payload[i + 4] >= 0x30 && payload[i + 4] <= 0x39) { // d
+                        let ver = '';
+                        let k = i;
+                        while (k < len && ver.length < 20) {
+                            const c = payload[k];
+                            if ((c >= 0x30 && c <= 0x39) || c === 0x2E) {
+                                ver += String.fromCharCode(c);
+                                k++;
+                            } else break;
+                        }
+                        // Prefer short versions like "1.0.5"
+                        if (ver.length >= 5 && ver.length <= 7) {
+                            const parts = ver.split('.');
+                            if (parts.length >= 2 && parts.length <= 3 &&
+                                parts.every(p => p.length > 0 && !isNaN(p))) {
+                                version = ver;
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (version) break;
+            }
+        }
+
+        return {
+            board,
+            version,
+            git,
+            isPicoCTR: !!(board && (board.toLowerCase().includes('picoctr') ||
+                                     board.toLowerCase().includes('agc') ||
+                                     board.toLowerCase().includes('americade') ||
+                                     board.toLowerCase().includes('acustomarcade'))),
+        };
+    }
+
+    /**
+     * Get human-readable info about a UF2 file, including PicoCTR binary info.
      * @param {ArrayBuffer} uf2Data
-     * @returns {{ blocks: number, familyId: string, minAddr: string, maxAddr: string, totalSize: number }}
+     * @returns {{ blocks: number, familyId: string, minAddr: string, maxAddr: string, totalSize: number, board: string|null, version: string|null, git: string|null, isPicoCTR: boolean }}
      */
     static getUF2Info(uf2Data) {
         const parsed = PicobootConnection.parseUF2(uf2Data);
@@ -512,12 +707,19 @@ class PicobootConnection {
             totalPayload += block.data.length;
         }
 
+        // Extract binary info (board, version, git)
+        const binaryInfo = PicobootConnection.extractBinaryInfo(parsed.blocks);
+
         return {
             blocks: parsed.totalBlocks,
             familyId: familyNames[parsed.familyId] || `Unknown (0x${parsed.familyId.toString(16).toUpperCase()})`,
             minAddr: `0x${minAddr.toString(16).toUpperCase()}`,
             maxAddr: `0x${maxAddr.toString(16).toUpperCase()}`,
             totalSize: totalPayload,
+            board: binaryInfo.board,
+            version: binaryInfo.version,
+            git: binaryInfo.git,
+            isPicoCTR: binaryInfo.isPicoCTR,
         };
     }
 
@@ -629,5 +831,235 @@ class PicobootConnection {
             onProgress('error', 0, 1, `Error: ${err.message}`);
             throw err;
         }
+    }
+}
+
+// ============================================================================
+// GitHub Firmware Release Fetcher
+// ============================================================================
+
+/**
+ * Fetches PicoCTR firmware releases from GitHub and provides download
+ * functionality for UF2 assets.
+ */
+// eslint-disable-next-line no-unused-vars
+class PicoCTRFirmwareReleases {
+    static REPO_OWNER = 'ACustomArcade';
+    static REPO_NAME  = 'pico-ctr-firmware';
+    static API_BASE   = 'https://api.github.com';
+
+    /**
+     * Fetch the latest release metadata from GitHub.
+     * Only fetches JSON data (which has CORS support). Binary asset downloads
+     * must use native browser download (no CORS for release-assets.githubusercontent.com).
+     * @param {Object|null} manifest - Pre-loaded firmware.json manifest for display names
+     * @returns {Promise<Object>}
+     */
+    static async fetchLatestRelease(manifest = null) {
+        const url = `${this.API_BASE}/repos/${this.REPO_OWNER}/${this.REPO_NAME}/releases/latest`;
+        const resp = await fetch(url, {
+            headers: { 'Accept': 'application/vnd.github.v3+json' },
+        });
+
+        if (resp.status === 404) {
+            throw new Error('No firmware releases found');
+        }
+        if (resp.status === 403) {
+            throw new Error('GitHub API rate limit exceeded. Please try again later or use a local file.');
+        }
+        if (!resp.ok) {
+            throw new Error(`GitHub API error: ${resp.status} ${resp.statusText}`);
+        }
+
+        const data = await resp.json();
+        const allAssets = data.assets || [];
+
+        // Build asset list with resolved display names
+        const uf2Assets = allAssets
+            .filter(a => a.name.endsWith('.uf2'))
+            .map(a => {
+                const meta = this.resolveAssetMeta(a.name, manifest);
+                return {
+                    name: a.name,
+                    size: a.size,
+                    browserUrl: a.browser_download_url,  // for native <a> download
+                    downloadCount: a.download_count,
+                    displayName: meta.displayName,
+                    description: meta.description,
+                    category: meta.category,
+                    isLegacy: meta.isLegacy,
+                };
+            });
+
+        return {
+            tag: data.tag_name,
+            name: data.name || data.tag_name,
+            body: data.body || '',
+            publishedAt: data.published_at,
+            htmlUrl: data.html_url,
+            hasManifest: !!manifest,
+            assets: uf2Assets,
+        };
+    }
+
+    /**
+     * Fetch all releases from GitHub (up to 30 most recent).
+     * @returns {Promise<Array>}
+     */
+    /**
+     * Fetch all releases from GitHub (up to 10 most recent).
+     * @param {Object|null} manifest - Pre-loaded firmware.json manifest for display names
+     * @returns {Promise<Array>}
+     */
+    static async fetchAllReleases(manifest = null) {
+        const url = `${this.API_BASE}/repos/${this.REPO_OWNER}/${this.REPO_NAME}/releases?per_page=10`;
+        const resp = await fetch(url, {
+            headers: { 'Accept': 'application/vnd.github.v3+json' },
+        });
+
+        if (!resp.ok) {
+            throw new Error(`GitHub API error: ${resp.status} ${resp.statusText}`);
+        }
+
+        const data = await resp.json();
+        return data.map(r => {
+            const allAssets = r.assets || [];
+            return {
+                tag: r.tag_name,
+                name: r.name || r.tag_name,
+                body: r.body || '',
+                publishedAt: r.published_at,
+                htmlUrl: r.html_url,
+                prerelease: r.prerelease,
+                hasManifest: !!manifest,
+                assets: allAssets
+                    .filter(a => a.name.endsWith('.uf2'))
+                    .map(a => {
+                        const meta = this.resolveAssetMeta(a.name, manifest);
+                        return {
+                            name: a.name,
+                            size: a.size,
+                            browserUrl: a.browser_download_url,
+                            downloadCount: a.download_count,
+                            displayName: meta.displayName,
+                            description: meta.description,
+                            category: meta.category,
+                            isLegacy: meta.isLegacy,
+                        };
+                    }),
+            };
+        });
+    }
+
+    /**
+     * Trigger a native browser download for a firmware asset.
+     * Uses a hidden <a> element with the GitHub release download URL.
+     * This bypasses CORS since <a> navigations are not subject to CORS policy.
+     * @param {string} browserUrl - The browser_download_url from GitHub
+     * @param {string} filename - The expected filename
+     */
+    static triggerNativeDownload(browserUrl, filename) {
+        const a = document.createElement('a');
+        a.href = browserUrl;
+        a.download = filename;  // hint only (ignored cross-origin, but GitHub sets Content-Disposition)
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    }
+
+    /**
+     * Load the firmware manifest from the local site.
+     * The manifest is served from the same origin, avoiding CORS issues.
+     * @param {string} [path='/firmware.json'] - Path to the manifest file
+     * @returns {Promise<Object|null>}
+     */
+    static async loadLocalManifest(path = 'firmware.json') {
+        try {
+            const resp = await fetch(path);
+            if (!resp.ok) return null;
+            return await resp.json();
+        } catch {
+            return null;
+        }
+    }
+
+    // Hardcoded fallback map for releases without firmware.json manifest
+    static FALLBACK_FIRMWARE_MAP = {
+        'pico-ctr-alu-mini.uf2':           { name: 'AtGames Legends Ultimate Mini',                    category: 'consumer' },
+        'pico-ctr-alu-mini-legacy.uf2':    { name: 'AtGames Legends Ultimate Mini (Legacy)',            category: 'consumer', legacy: true },
+        'pico-ctr-alu.uf2':                { name: 'AtGames Legends Ultimate 1.1/1.2',                 category: 'consumer' },
+        'pico-ctr-alu-legacy.uf2':         { name: 'AtGames Legends Ultimate 1.1/1.2 (Legacy)',        category: 'consumer', legacy: true },
+        'pico-ctr-gamer-mini.uf2':         { name: 'AtGames Legends Gamer Mini',                       category: 'consumer' },
+        'pico-ctr-gamer-mini-legacy.uf2':  { name: 'AtGames Legends Gamer Mini (Legacy)',              category: 'consumer', legacy: true },
+        'pico-ctr-gamer-pro.uf2':          { name: 'AtGames Legends Gamer Pro',                        category: 'consumer' },
+        'pico-ctr-gamer-pro-legacy.uf2':   { name: 'AtGames Legends Gamer Pro (Legacy)',               category: 'consumer', legacy: true },
+        'pico-ctr.uf2':                    { name: 'Standard PicoCTR',                                 category: 'standard' },
+        'pico-ctr-tester.uf2':             { name: 'PicoCTR Development Board',                        category: 'development' },
+        'pico-ctr-tester-atg.uf2':         { name: 'PicoCTR Development Board (AtGames mode)',         category: 'development' },
+    };
+
+    /**
+     * Try to fetch the firmware.json manifest from a release's assets.
+     * NOTE: This typically fails due to CORS on release-assets.githubusercontent.com.
+     * Prefer loadLocalManifest() for the manifest hosted on the same origin.
+     * @param {Array} rawAssets - The raw GitHub release assets array
+     * @returns {Promise<Object|null>} Parsed manifest or null
+     */
+    static async fetchManifest(rawAssets) {
+        // Kept for reference but not used in the default flow.
+        // GitHub release asset binary downloads don't support CORS.
+        return null;
+    }
+
+    /**
+     * Resolve the display metadata for a firmware asset.
+     * Uses manifest data if available, falls back to hardcoded map, then filename parsing.
+     * @param {string} filename
+     * @param {Object|null} manifest - Parsed firmware.json or null
+     * @returns {{ displayName: string, description: string, category: string, isLegacy: boolean }}
+     */
+    static resolveAssetMeta(filename, manifest) {
+        // 1. Try manifest
+        if (manifest && manifest.firmware) {
+            const entry = manifest.firmware.find(f => f.file === filename);
+            if (entry) {
+                return {
+                    displayName: entry.name,
+                    description: entry.description || '',
+                    category: entry.category || 'standard',
+                    isLegacy: !!entry.legacy,
+                };
+            }
+        }
+
+        // 2. Try fallback map
+        const fallback = this.FALLBACK_FIRMWARE_MAP[filename];
+        if (fallback) {
+            return {
+                displayName: fallback.name,
+                description: '',
+                category: fallback.category || 'standard',
+                isLegacy: !!fallback.legacy,
+            };
+        }
+
+        // 3. Parse filename
+        let base = filename.replace(/\.uf2$/i, '').replace(/^pico-ctr-?/, '');
+        const isLegacy = base.endsWith('-legacy');
+        if (isLegacy) base = base.replace(/-legacy$/, '');
+        let displayName = (base || 'Default')
+            .split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        if (isLegacy) displayName += ' (Legacy)';
+
+        return { displayName, description: '', category: 'standard', isLegacy };
+    }
+
+    /**
+     * Get the releases page URL for manual download.
+     * @returns {string}
+     */
+    static getReleasesPageUrl() {
+        return `https://github.com/${this.REPO_OWNER}/${this.REPO_NAME}/releases`;
     }
 }
