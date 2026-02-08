@@ -392,6 +392,17 @@ main {
     text-align: center;
 }
 
+/* Highlight form-groups whose value differs from flash */
+.form-group.field-modified {
+    position: relative;
+    background: rgba(253, 203, 110, 0.06);
+    border-radius: var(--radius-sm);
+    padding: 0.5rem 0.75rem;
+    margin-left: -0.75rem;
+    margin-right: -0.75rem;
+    border-left: 3px solid var(--color-warning);
+}
+
 /* Buttons */
 .btn {
     display: inline-flex;

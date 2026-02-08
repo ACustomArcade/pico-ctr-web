@@ -209,23 +209,101 @@ class PicoCTRDevice {
     }
 
     /**
-     * Parse a settings feature report into a field-value object
+     * Parse a settings feature report into a field-value object.
+     *
+     * WebHID's receiveFeatureReport returns a DataView whose first byte is the
+     * report ID (per spec & Chrome's implementation).  The actual field data
+     * starts at byte 1.  The config field offsets are 0-based relative to the
+     * data portion, so we add a +1 byte offset to skip the report ID.
      */
     _parseSettingsReport(dataView) {
         const fields = this.config.settings.fields;
+        const dataSize = this.config.settings.report_size - 1; // 7 data bytes
         const result = {};
 
+        // Determine the data offset: if the DataView is larger than the data-only
+        // size, the first byte is the report ID and we skip it.
+        const dataOffset = (dataView.byteLength > dataSize) ? 1 : 0;
+
         for (const field of fields) {
-            const offset = field.offset;
-            if (offset < dataView.byteLength) {
-                let value = dataView.getUint8(offset);
+            const bytePos = field.offset + dataOffset;
+            if (bytePos < dataView.byteLength) {
+                let value = dataView.getUint8(bytePos);
                 if (field.type === 'bool') {
                     value = value !== 0;
                 }
                 result[field.name] = value;
             }
         }
+
+        // Transpose wire color order → display RGB order
+        this._wireToDisplayColor(result);
+
         return result;
+    }
+
+    /**
+     * Transpose color channels from wire order to display RGB order.
+     *
+     * The device may store colors in a non-RGB order (e.g. GRB for WS2812).
+     * The config's "color_order" string (default "rgb") defines the wire byte
+     * order: each character maps to which display channel that wire position
+     * carries.  For "grb": wire byte 0 = green, wire byte 1 = red, wire byte 2 = blue.
+     *
+     * This method converts from wire → display (for reading from device).
+     */
+    _wireToDisplayColor(settings) {
+        const order = (this.config.settings.color_order || 'rgb').toLowerCase();
+        if (order === 'rgb') return; // No transpose needed
+
+        // Read the wire values (named r/g/b in the struct, but actually in wire order)
+        const wire = [
+            settings.rgb_color_r,  // wire position 0
+            settings.rgb_color_g,  // wire position 1
+            settings.rgb_color_b,  // wire position 2
+        ];
+
+        // Map: order string tells us which display channel each wire position holds
+        const channelMap = { r: 0, g: 1, b: 2 };
+        const display = [0, 0, 0]; // [R, G, B]
+        for (let i = 0; i < 3; i++) {
+            const ch = order[i]; // which display channel is at wire position i
+            display[channelMap[ch]] = wire[i];
+        }
+
+        settings.rgb_color_r = display[0];
+        settings.rgb_color_g = display[1];
+        settings.rgb_color_b = display[2];
+    }
+
+    /**
+     * Transpose color channels from display RGB order to wire order.
+     * Inverse of _wireToDisplayColor (for writing to device).
+     */
+    _displayToWireColor(settings) {
+        const order = (this.config.settings.color_order || 'rgb').toLowerCase();
+        if (order === 'rgb') return settings;
+
+        const display = [
+            settings.rgb_color_r,  // display R
+            settings.rgb_color_g,  // display G
+            settings.rgb_color_b,  // display B
+        ];
+
+        // Reverse map: for each wire position, pick the display channel it expects
+        const channelMap = { r: 0, g: 1, b: 2 };
+        const wire = [0, 0, 0];
+        for (let i = 0; i < 3; i++) {
+            const ch = order[i]; // which display channel goes into wire position i
+            wire[i] = display[channelMap[ch]];
+        }
+
+        return {
+            ...settings,
+            rgb_color_r: wire[0],  // wire position 0
+            rgb_color_g: wire[1],  // wire position 1
+            rgb_color_b: wire[2],  // wire position 2
+        };
     }
 
     /**
@@ -233,11 +311,16 @@ class PicoCTRDevice {
      */
     async setSettings(settings) {
         const fields = this.config.settings.fields;
-        const reportSize = this.config.settings.report_size;
-        const data = new Uint8Array(reportSize).fill(0);
+        // WebHID sends the report ID separately, so we only send the data
+        // portion (report_size minus the 1-byte report_id prefix).
+        const dataSize = this.config.settings.report_size - 1;
+        const data = new Uint8Array(dataSize).fill(0);
+
+        // Transpose display RGB → wire color order before writing
+        const wireSettings = this._displayToWireColor(settings);
 
         for (const field of fields) {
-            const value = settings[field.name];
+            const value = wireSettings[field.name];
             if (value !== undefined) {
                 let byteVal = field.type === 'bool' ? (value ? 1 : 0) : (value & 0xFF);
                 data[field.offset] = byteVal;
@@ -268,17 +351,20 @@ class PicoCTRDevice {
 
     /** Save current settings to flash */
     async save() {
-        await this._sendFeatureReport('settings_save', new Uint8Array(8));
+        // WebHID sends report ID separately; only send data portion
+        await this._sendFeatureReport('settings_save', new Uint8Array(this.config.settings.report_size - 1));
     }
 
     /** Reset settings to factory defaults */
     async reset() {
-        await this._sendFeatureReport('settings_reset', new Uint8Array(8));
+        // WebHID sends report ID separately; only send data portion
+        await this._sendFeatureReport('settings_reset', new Uint8Array(this.config.settings.report_size - 1));
     }
 
     /** Enter BOOTSEL mode for firmware update (device will disconnect!) */
     async enterBootsel() {
-        await this._sendFeatureReport('bootsel', new Uint8Array(8));
+        // WebHID sends report ID separately; only send data portion
+        await this._sendFeatureReport('bootsel', new Uint8Array(this.config.settings.report_size - 1));
     }
 
     // ========================================================================

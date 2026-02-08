@@ -200,14 +200,55 @@
         };
     }
 
+    /**
+     * Map from settings field name → the DOM element(s) whose
+     * closest .form-group should be highlighted when changed.
+     */
+    const fieldDomMap = {
+        enable_rgb:    () => [dom.enableRgb],
+        rgb_animation: () => [dom.animation],
+        rgb_color_r:   () => [dom.colorR, dom.colorG, dom.colorB, dom.colorPicker],
+        rgb_color_g:   () => [dom.colorR, dom.colorG, dom.colorB, dom.colorPicker],
+        rgb_color_b:   () => [dom.colorR, dom.colorG, dom.colorB, dom.colorPicker],
+        led_count:     () => [dom.ledCount],
+        led_brightness:() => [dom.brightness],
+    };
+
     function checkUnsavedChanges() {
-        if (!currentSettings || !flashSettings) {
+        // Clear all existing highlights first
+        document.querySelectorAll('.field-modified').forEach(el =>
+            el.classList.remove('field-modified')
+        );
+
+        if (!flashSettings) {
             dom.unsavedBanner.style.display = 'none';
             return;
         }
+
         const uiSettings = getSettingsFromUI();
-        const hasChanges = JSON.stringify(uiSettings) !== JSON.stringify(flashSettings);
-        dom.unsavedBanner.style.display = hasChanges ? '' : 'none';
+        const changedFields = [];
+
+        for (const key of Object.keys(flashSettings)) {
+            if (uiSettings[key] !== flashSettings[key]) {
+                changedFields.push(key);
+                // Highlight the form-group(s) for this field
+                const elements = fieldDomMap[key]?.() || [];
+                const groups = new Set();
+                for (const el of elements) {
+                    const group = el.closest('.form-group');
+                    if (group) groups.add(group);
+                }
+                groups.forEach(g => g.classList.add('field-modified'));
+            }
+        }
+
+        if (changedFields.length > 0) {
+            dom.unsavedBanner.style.display = '';
+            dom.unsavedBanner.innerHTML =
+                '<span>⚡ Device has unsaved changes &mdash; use <strong>Save to Flash</strong> to persist them</span>';
+        } else {
+            dom.unsavedBanner.style.display = 'none';
+        }
     }
 
     function rgbToHex(r, g, b) {
@@ -250,6 +291,10 @@
                 setConnected(false);
                 currentSettings = null;
                 flashSettings = null;
+                document.querySelectorAll('.field-modified').forEach(el =>
+                    el.classList.remove('field-modified')
+                );
+                dom.unsavedBanner.style.display = 'none';
             });
 
             // Read device info and settings
@@ -271,6 +316,11 @@
             setConnected(false);
             currentSettings = null;
             flashSettings = null;
+            // Clear unsaved highlights
+            document.querySelectorAll('.field-modified').forEach(el =>
+                el.classList.remove('field-modified')
+            );
+            dom.unsavedBanner.style.display = 'none';
         } catch (err) {
             log(`Disconnect error: ${err.message}`, 'error');
         }
@@ -313,7 +363,12 @@
             flashSettings = normalizeSettings(flash);
 
             updateUIFromSettings(currentSettings);
-        updateColorGroupVisibility();
+            updateColorGroupVisibility();
+            checkUnsavedChanges();
+
+            if (JSON.stringify(currentSettings) !== JSON.stringify(flashSettings)) {
+                log('Device has unsaved settings that differ from flash', 'warning');
+            }
 
             log('Settings loaded successfully', 'success');
         } catch (err) {

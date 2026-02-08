@@ -101,6 +101,7 @@
   },
   "settings": {
     "report_size": 8,
+    "color_order": "grb",
     "fields": [
       {
         "name": "enable_rgb",
