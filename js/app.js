@@ -19,8 +19,7 @@
     let picoboot = null;
     let selectedUF2 = null;  // { data: ArrayBuffer, info: object, name: string }
     let isFlashing = false;
-    let latestRelease = null; // cached GitHub release data
-    let fwSource = 'github';  // 'github' or 'local'
+    let latestRelease = null; // cached firmware manifest data
 
     // ========================================================================
     // DOM References
@@ -77,10 +76,7 @@
         btnFwBrowse: $('#btn-fw-browse'),
         fwFileName: $('#fw-file-name'),
         fwFileInfo: $('#fw-file-info'),
-        fwInfoTarget: $('#fw-info-target'),
-        fwInfoBlocks: $('#fw-info-blocks'),
         fwInfoSize: $('#fw-info-size'),
-        fwInfoAddr: $('#fw-info-addr'),
         fwInfoBoard: $('#fw-info-board'),
         fwInfoVersion: $('#fw-info-version'),
         fwInfoGit: $('#fw-info-git'),
@@ -95,11 +91,7 @@
         fwStepConnect: $('#fw-step-connect'),
         fwStepFile: $('#fw-step-file'),
         fwStepFlash: $('#fw-step-flash'),
-        // Firmware source tabs
-        fwTabGithub: $('#fw-tab-github'),
-        fwTabLocal: $('#fw-tab-local'),
-        fwPanelGithub: $('#fw-panel-github'),
-        fwPanelLocal: $('#fw-panel-local'),
+        // Firmware release list
         fwReleaseLoading: $('#fw-release-loading'),
         fwReleaseError: $('#fw-release-error'),
         fwReleaseErrorMsg: $('#fw-release-error-msg'),
@@ -425,17 +417,10 @@
         dom.fwDeviceName.textContent = '—';
 
         // Reset file step
-        dom.fwFileName.textContent = 'No file selected';
-        dom.fwFileName.classList.remove('fw-file-hint');
         dom.fwFileInfo.style.display = 'none';
         dom.fwValidationWarning.style.display = 'none';
         dom.btnFwBrowse.disabled = true;
         selectedUF2 = null;
-
-        // Reset source tabs
-        dom.fwTabGithub.disabled = true;
-        dom.fwTabLocal.disabled = true;
-        switchFwSource('github');
 
         // Reset release panel
         dom.fwReleaseLoading.style.display = '';
@@ -463,17 +448,8 @@
     }
 
     function switchFwSource(source) {
-        fwSource = source;
-        dom.fwTabGithub.classList.toggle('active', source === 'github');
-        dom.fwTabLocal.classList.toggle('active', source === 'local');
-        dom.fwPanelGithub.style.display = source === 'github' ? '' : 'none';
-        dom.fwPanelLocal.style.display = source === 'local' ? '' : 'none';
-        // Clear selection when switching
-        dom.fwFileInfo.style.display = 'none';
-        dom.fwValidationWarning.style.display = 'none';
-        dom.btnFwFlash.disabled = true;
-        selectedUF2 = null;
-        setFirmwareStepState(dom.fwStepFlash, '');
+        // No-op — kept for compatibility but tabs have been removed.
+        // The firmware list and local file input are always visible.
     }
 
     function setFirmwareStepState(stepEl, state) {
@@ -498,17 +474,17 @@
             dom.fwDeviceName.textContent = name;
             dom.btnFwBrowse.disabled = false;
 
-            // Enable source tabs
-            dom.fwTabGithub.disabled = false;
-            dom.fwTabLocal.disabled = false;
+            // Enable source tabs (no longer exist, but kept for safety)
+            // dom.fwTabGithub.disabled = false;
+            // dom.fwTabLocal.disabled = false;
 
             setFirmwareStepState(dom.fwStepConnect, 'complete');
             setFirmwareStepState(dom.fwStepFile, 'active');
 
             log(`BOOTSEL device connected: ${name}`, 'success');
 
-            // Start loading GitHub releases in background
-            loadGitHubReleases();
+            // Start loading firmware list in background
+            loadFirmwareList();
 
             // Handle disconnection
             picoboot.onDisconnect(() => {
@@ -553,10 +529,7 @@
         }
 
         // Technical info
-        dom.fwInfoTarget.textContent = info.familyId;
-        dom.fwInfoBlocks.textContent = info.blocks.toString();
         dom.fwInfoSize.textContent = formatBytes(info.totalSize);
-        dom.fwInfoAddr.textContent = `${info.minAddr} – ${info.maxAddr}`;
         dom.fwFileInfo.style.display = '';
 
         // Reject non-PicoCTR firmware
@@ -573,9 +546,7 @@
         const parts = [];
         if (info.board) parts.push(info.board);
         if (info.version) parts.push(`v${info.version}`);
-        parts.push(`${info.blocks} blocks`);
         parts.push(formatBytes(info.totalSize));
-        parts.push(info.familyId);
         return parts.join(', ');
     }
 
@@ -583,8 +554,9 @@
         const file = event.target.files[0];
         if (!file) return;
 
-        dom.fwFileName.textContent = file.name;
-        dom.fwFileName.classList.remove('fw-file-hint');
+        // Deselect any selected release item
+        dom.fwReleaseList.querySelectorAll('.fw-release-item').forEach(el => el.classList.remove('selected'));
+
         selectedUF2 = null;
         dom.fwFileInfo.style.display = 'none';
         dom.fwValidationWarning.style.display = 'none';
@@ -626,94 +598,131 @@
     // GitHub Releases
     // ====================================================
 
-    async function loadGitHubReleases() {
+    async function loadFirmwareList() {
         dom.fwReleaseLoading.style.display = '';
         dom.fwReleaseError.style.display = 'none';
         dom.fwReleaseContent.style.display = 'none';
 
         try {
-            // Load manifest from the local site (same origin — no CORS issues)
-            const manifest = await PicoCTRFirmwareReleases.loadLocalManifest();
+            // Load manifest from same-origin /firmware/manifest.json
+            const manifest = await PicoCTRFirmwareReleases.loadManifest();
+            const { release, assets } = PicoCTRFirmwareReleases.buildAssetList(manifest);
 
-            // Fetch release metadata from GitHub API (JSON endpoint has CORS)
-            latestRelease = await PicoCTRFirmwareReleases.fetchLatestRelease(manifest);
+            latestRelease = { release, assets };
 
-            if (latestRelease.assets.length === 0) {
-                throw new Error('No firmware files found in the latest release');
+            if (assets.length === 0) {
+                throw new Error('No firmware files available');
             }
 
             // Populate release header
-            dom.fwReleaseTag.textContent = latestRelease.tag;
-            dom.fwReleaseDate.textContent = new Date(latestRelease.publishedAt).toLocaleDateString();
-            dom.fwReleaseLink.href = latestRelease.htmlUrl;
+            dom.fwReleaseTag.textContent = release.tag;
+            if (release.date) {
+                dom.fwReleaseDate.textContent = new Date(release.date).toLocaleDateString();
+            }
+            if (release.url) {
+                dom.fwReleaseLink.href = release.url;
+                dom.fwReleaseLink.style.display = '';
+            } else {
+                dom.fwReleaseLink.style.display = 'none';
+            }
 
-            // Build firmware list, grouped by category
+            // Build firmware list, grouped by manufacturer
             dom.fwReleaseList.innerHTML = '';
 
-            // Sort: consumer first, then standard, then development; non-legacy before legacy
-            const categoryOrder = { consumer: 0, standard: 1, development: 2 };
-            const sorted = [...latestRelease.assets].sort((a, b) => {
-                const catA = categoryOrder[a.category] ?? 9;
-                const catB = categoryOrder[b.category] ?? 9;
-                if (catA !== catB) return catA - catB;
-                if (a.isLegacy !== b.isLegacy) return a.isLegacy ? 1 : -1;
-                return a.displayName.localeCompare(b.displayName);
-            });
+            // Group assets by manufacturer, preserving manifest order
+            const grouped = new Map();
+            for (const asset of assets) {
+                if (!grouped.has(asset.manufacturer)) grouped.set(asset.manufacturer, []);
+                grouped.get(asset.manufacturer).push(asset);
+            }
 
-            let lastCategory = null;
-            for (const asset of sorted) {
-                // Add category separator
-                if (asset.category !== lastCategory) {
-                    lastCategory = asset.category;
-                    const label = { consumer: 'AtGames Consoles', standard: 'Standard', development: 'Development' }[asset.category] || asset.category;
-                    const sep = document.createElement('div');
-                    sep.className = 'fw-release-category';
-                    sep.textContent = label;
-                    dom.fwReleaseList.appendChild(sep);
+            // Sort each manufacturer's entries: non-dev first, then alphabetical
+            for (const entries of grouped.values()) {
+                entries.sort((a, b) => {
+                    if (a.isDev !== b.isDev) return a.isDev ? 1 : -1;
+                    return a.displayName.localeCompare(b.displayName);
+                });
+            }
+
+            // Render by manufacturer
+            for (const [manufacturer, entries] of grouped) {
+                const sep = document.createElement('div');
+                sep.className = 'fw-release-category';
+                sep.textContent = manufacturer;
+                dom.fwReleaseList.appendChild(sep);
+
+                for (const asset of entries) {
+                    const item = document.createElement('button');
+                    item.className = 'fw-release-item' + (asset.isDev ? ' fw-release-item-dev' : '');
+                    item.innerHTML = `
+                        <div class="fw-release-item-info">
+                            <span class="fw-release-item-name">${asset.displayName}${asset.isDev ? ' <span class="fw-dev-badge">DEV</span>' : ''}</span>
+                            ${asset.description ? `<span class="fw-release-item-desc">${asset.description}</span>` : ''}
+                        </div>
+                    `;
+                    item.addEventListener('click', () => handleFirmwareSelect(asset, item));
+                    dom.fwReleaseList.appendChild(item);
                 }
-
-                const item = document.createElement('button');
-                item.className = 'fw-release-item' + (asset.isLegacy ? ' fw-release-item-legacy' : '');
-                item.innerHTML = `
-                    <div class="fw-release-item-info">
-                        <span class="fw-release-item-name">${asset.displayName}</span>
-                        ${asset.description ? `<span class="fw-release-item-desc">${asset.description}</span>` : ''}
-                    </div>
-                    <span class="fw-release-item-meta">${formatBytes(asset.size)}</span>
-                `;
-                item.addEventListener('click', () => handleGitHubAssetSelect(asset, item));
-                dom.fwReleaseList.appendChild(item);
             }
 
             dom.fwReleaseLoading.style.display = 'none';
             dom.fwReleaseContent.style.display = '';
 
-            const src = latestRelease.hasManifest ? 'manifest' : 'fallback map';
-            log(`Loaded ${latestRelease.assets.length} firmware files from release ${latestRelease.tag} (${src})`, 'success');
+            log(`${assets.length} firmware files available (${release.tag})`, 'success');
         } catch (err) {
             dom.fwReleaseLoading.style.display = 'none';
             dom.fwReleaseErrorMsg.textContent = err.message;
+            dom.fwReleaseFallbackLink.href = PicoCTRFirmwareReleases.getReleasesPageUrl();
             dom.fwReleaseError.style.display = '';
-            log(`Failed to load GitHub releases: ${err.message}`, 'error');
+            log(`Failed to load firmware list: ${err.message}`, 'error');
         }
     }
 
-    async function handleGitHubAssetSelect(asset, itemEl) {
-        // Deselect all items
-        dom.fwReleaseList.querySelectorAll('.fw-release-item').forEach(el => el.classList.remove('selected'));
+    /**
+     * Handle firmware selection from the release list.
+     * Downloads the UF2 from same-origin, parses it, and readies it for flashing.
+     */
+    async function handleFirmwareSelect(asset, itemEl) {
+        // Deselect all items, select this one
+        dom.fwReleaseList.querySelectorAll('.fw-release-item').forEach(el => {
+            el.classList.remove('selected');
+            el.disabled = false;
+        });
         itemEl.classList.add('selected');
 
-        // Trigger native browser download (bypasses CORS — uses <a> navigation)
-        log(`Downloading ${asset.displayName} (${asset.name})...`);
-        PicoCTRFirmwareReleases.triggerNativeDownload(asset.browserUrl, asset.name);
+        // Reset state
+        selectedUF2 = null;
+        dom.fwFileInfo.style.display = 'none';
+        dom.fwValidationWarning.style.display = 'none';
+        dom.btnFwFlash.disabled = true;
 
-        // Switch to Local File tab so user can select the downloaded file
-        switchFwSource('local');
-        dom.btnFwBrowse.disabled = false;
-        dom.fwFileName.textContent = `⬇️ Downloading ${asset.name} — select it from your Downloads folder`;
-        dom.fwFileName.classList.add('fw-file-hint');
+        // Show downloading state
+        itemEl.classList.add('downloading');
+        log(`Downloading ${asset.displayName}...`);
 
-        log(`"${asset.name}" download started. Select the downloaded file using the file picker to continue.`, 'info');
+        try {
+            const data = await PicoCTRFirmwareReleases.downloadFirmware(asset.url);
+            itemEl.classList.remove('downloading');
+
+            const info = PicobootConnection.getUF2Info(data);
+            const summary = displayUF2Info(info, asset.name);
+            if (!summary) {
+                // Not PicoCTR firmware — refuse to flash
+                selectedUF2 = null;
+                return;
+            }
+
+            selectedUF2 = { data, info, name: asset.name };
+            dom.btnFwFlash.disabled = false;
+
+            setFirmwareStepState(dom.fwStepFile, 'complete');
+            setFirmwareStepState(dom.fwStepFlash, 'active');
+
+            log(`Firmware ready: ${asset.displayName} (${summary})`, 'success');
+        } catch (err) {
+            itemEl.classList.remove('downloading');
+            log(`Failed to download ${asset.displayName}: ${err.message}`, 'error');
+        }
     }
 
     function formatBytes(bytes) {
@@ -733,8 +742,8 @@
         dom.btnFwFlash.disabled = true;
         dom.btnFwConnect.disabled = true;
         dom.btnFwBrowse.disabled = true;
-        dom.fwTabGithub.disabled = true;
-        dom.fwTabLocal.disabled = true;
+        // Disable all release items during flash
+        dom.fwReleaseList.querySelectorAll('.fw-release-item').forEach(el => el.disabled = true);
         dom.fwProgressContainer.style.display = '';
         dom.fwProgressFill.className = 'fw-progress-fill';
 
@@ -771,6 +780,13 @@
                     dom.fwProgressFill.classList.add('complete');
                     log('Firmware flashed successfully! Device is rebooting.', 'success');
                     setFirmwareStepState(dom.fwStepFlash, 'complete');
+
+                    // After a short delay, redirect back to the main connect view
+                    setTimeout(() => {
+                        hideFirmwareSection();
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                        log('Device rebooted. Click "Select Device" to connect and configure settings.', 'info');
+                    }, 2500);
                 } else if (phase === 'error') {
                     dom.fwProgressFill.classList.add('error');
                     log(`Flash error: ${message}`, 'error');
@@ -891,10 +907,6 @@
         dom.fwFileInput.addEventListener('change', handleFwFileSelect);
         dom.btnFwFlash.addEventListener('click', handleFwFlash);
         dom.btnBootstrap.addEventListener('click', handleBootstrap);
-
-        // Firmware source tab handlers
-        dom.fwTabGithub.addEventListener('click', () => switchFwSource('github'));
-        dom.fwTabLocal.addEventListener('click', () => switchFwSource('local'));
 
         // Set initial state
         setConnected(false);

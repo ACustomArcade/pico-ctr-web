@@ -189,51 +189,37 @@
                         <span class="step-title">Select firmware</span>
                     </div>
                     <div class="step-content">
-                        <!-- Firmware source tabs -->
-                        <div class="fw-source-tabs">
-                            <button class="fw-source-tab active" id="fw-tab-github" disabled>
-                                <span class="btn-icon">☁️</span> Download from GitHub
+                        <!-- Firmware release list (loaded from same-origin /firmware/) -->
+                        <div id="fw-release-loading" class="fw-release-loading">
+                            <span class="spinner"></span> Loading available firmware...
+                        </div>
+                        <div id="fw-release-error" class="fw-release-error" style="display: none;">
+                            <span id="fw-release-error-msg">Failed to load firmware</span>
+                            <a id="fw-release-fallback-link" href="#" target="_blank" rel="noopener">
+                                Download from GitHub manually →
+                            </a>
+                        </div>
+                        <div id="fw-release-content" style="display: none;">
+                            <div class="fw-release-header">
+                                <span id="fw-release-tag" class="fw-release-tag"></span>
+                                <span id="fw-release-date" class="fw-release-date"></span>
+                                <a id="fw-release-link" class="fw-release-link" href="#" target="_blank" rel="noopener">View release →</a>
+                            </div>
+                            <div id="fw-release-list" class="fw-release-list">
+                                <!-- Firmware asset items populated by JS -->
+                            </div>
+                        </div>
+
+                        <!-- Local file fallback -->
+                        <div class="fw-local-fallback">
+                            <input type="file" id="fw-file-input" accept=".uf2" style="display: none;">
+                            <span class="fw-local-or">or</span>
+                            <button id="btn-fw-browse" class="btn btn-ghost btn-small" disabled>
+                                <span class="btn-icon">📁</span> Load local .uf2 file
                             </button>
-                            <button class="fw-source-tab" id="fw-tab-local" disabled>
-                                <span class="btn-icon">📁</span> Local File
-                            </button>
                         </div>
 
-                        <!-- GitHub releases panel -->
-                        <div id="fw-panel-github" class="fw-source-panel">
-                            <div id="fw-release-loading" class="fw-release-loading">
-                                <span class="spinner"></span> Loading releases from GitHub...
-                            </div>
-                            <div id="fw-release-error" class="fw-release-error" style="display: none;">
-                                <span id="fw-release-error-msg">Failed to load releases</span>
-                                <a id="fw-release-fallback-link" href="https://github.com/ACustomArcade/pico-ctr-firmware/releases" target="_blank" rel="noopener">
-                                    Download from GitHub manually →
-                                </a>
-                            </div>
-                            <div id="fw-release-content" style="display: none;">
-                                <div class="fw-release-header">
-                                    <span id="fw-release-tag" class="fw-release-tag"></span>
-                                    <span id="fw-release-date" class="fw-release-date"></span>
-                                    <a id="fw-release-link" class="fw-release-link" href="#" target="_blank" rel="noopener">View on GitHub →</a>
-                                </div>
-                                <div id="fw-release-list" class="fw-release-list">
-                                    <!-- Firmware asset items populated by JS -->
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Local file panel -->
-                        <div id="fw-panel-local" class="fw-source-panel" style="display: none;">
-                            <div class="file-picker">
-                                <input type="file" id="fw-file-input" accept=".uf2" style="display: none;">
-                                <button id="btn-fw-browse" class="btn btn-secondary" disabled>
-                                    <span class="btn-icon">📁</span> Choose .uf2 File
-                                </button>
-                                <span id="fw-file-name" class="fw-file-name">No file selected</span>
-                            </div>
-                        </div>
-
-                        <!-- Firmware info (shown for both sources) -->
+                        <!-- Firmware info -->
                         <div id="fw-file-info" class="fw-file-info" style="display: none;">
                             <div class="fw-info-row" id="fw-info-row-board" style="display: none;">
                                 <span>Board:</span><span id="fw-info-board">—</span>
@@ -244,10 +230,7 @@
                             <div class="fw-info-row" id="fw-info-row-git" style="display: none;">
                                 <span>Git:</span><span id="fw-info-git">—</span>
                             </div>
-                            <div class="fw-info-row"><span>Target:</span><span id="fw-info-target">—</span></div>
-                            <div class="fw-info-row"><span>Blocks:</span><span id="fw-info-blocks">—</span></div>
                             <div class="fw-info-row"><span>Size:</span><span id="fw-info-size">—</span></div>
-                            <div class="fw-info-row"><span>Address range:</span><span id="fw-info-addr">—</span></div>
                         </div>
 
                         <!-- Non-PicoCTR error -->
