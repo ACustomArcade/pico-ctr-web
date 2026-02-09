@@ -640,6 +640,40 @@ footer a:hover {
     line-height: 1.5;
 }
 
+.fw-windows-help {
+    background: rgba(255, 193, 7, 0.08);
+    border: 1px solid rgba(255, 193, 7, 0.3);
+    border-radius: var(--radius-sm);
+    padding: 0.75rem 1rem;
+    margin-bottom: 1.25rem;
+    font-size: 0.85rem;
+    line-height: 1.6;
+}
+
+.fw-windows-help summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--color-warning, #ffc107);
+}
+
+.fw-windows-help ol {
+    margin: 0.5rem 0;
+    padding-left: 1.25rem;
+}
+
+.fw-windows-help li {
+    margin: 0.25rem 0;
+}
+
+.fw-windows-help p {
+    margin: 0.5rem 0;
+}
+
+.fw-windows-help .fw-windows-alt {
+    padding-top: 0.5rem;
+    border-top: 1px solid rgba(255, 193, 7, 0.2);
+}
+
 .firmware-steps {
     display: flex;
     flex-direction: column;

@@ -163,6 +163,28 @@
                 The device must be in BOOTSEL mode (hold BOOTSEL button while plugging in, or use the button above).
             </p>
 
+            <div id="fw-windows-help" class="fw-windows-help" style="display: none;">
+                <details>
+                    <summary>⚠️ Windows: PICOBOOT driver required</summary>
+                    <p>
+                        Windows requires the <strong>WinUSB</strong> driver for the PICOBOOT interface.
+                        Without it, the browser cannot communicate with the device for flashing.
+                    </p>
+                    <ol>
+                        <li>Download and run <a href="https://zadig.akeo.ie/" target="_blank" rel="noopener">Zadig</a></li>
+                        <li>Put your device in BOOTSEL mode (hold BOOTSEL while plugging in)</li>
+                        <li>In Zadig, select <strong>Options → List All Devices</strong></li>
+                        <li>Select <strong>"RP2 Boot (Interface 1)"</strong> from the dropdown</li>
+                        <li>Set the driver to <strong>WinUSB</strong> and click <strong>Replace Driver</strong></li>
+                        <li>Unplug and re-plug the device in BOOTSEL mode, then try connecting again</li>
+                    </ol>
+                    <p class="fw-windows-alt">
+                        <strong>Alternative:</strong> You can also flash by dragging the .uf2 file onto the
+                        <strong>RPI-RP2</strong> drive that appears in File Explorer when in BOOTSEL mode.
+                    </p>
+                </details>
+            </div>
+
             <div class="firmware-steps">
                 <!-- Step 1: Connect BOOTSEL device -->
                 <div class="firmware-step" id="fw-step-connect">

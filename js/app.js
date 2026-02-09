@@ -522,6 +522,21 @@
         if (state === 'complete') stepEl.classList.add('step-complete');
     }
 
+    /**
+     * Detect if a WebUSB error is likely a Windows driver issue.
+     * On Windows, claimInterface() fails with SecurityError or NetworkError
+     * when the interface doesn't have the WinUSB driver.
+     */
+    function _isWindowsDriverError(err) {
+        const isWindows = navigator.userAgent.includes('Windows');
+        const isDriverError = err.name === 'SecurityError' ||
+            err.name === 'NetworkError' ||
+            err.message?.includes('Unable to claim interface') ||
+            err.message?.includes('Access denied') ||
+            err.message?.includes('failed to claim');
+        return isWindows && isDriverError;
+    }
+
     async function handleFwConnect() {
         if (!PicobootConnection.isSupported()) {
             log('WebUSB is not supported in this browser', 'error');
@@ -560,6 +575,14 @@
         } catch (err) {
             if (err.name === 'NotFoundError' || err.message?.includes('No device selected')) {
                 log('BOOTSEL device selection cancelled', 'warning');
+            } else if (_isWindowsDriverError(err)) {
+                log('BOOTSEL connection failed: Windows cannot access the PICOBOOT USB interface. ' +
+                    'This usually means the WinUSB driver is not installed for the PICOBOOT interface. ' +
+                    'Use Zadig (zadig.akeo.ie) to install the WinUSB driver for the "RP2 Boot (Interface 1)" device, ' +
+                    'or drag-and-drop the UF2 file onto the RPI-RP2 drive instead.', 'error');
+                // Show the Windows help note if it exists
+                const winHelp = document.getElementById('fw-windows-help');
+                if (winHelp) winHelp.style.display = '';
             } else {
                 log(`BOOTSEL connection failed: ${err.message}`, 'error');
             }
@@ -1027,6 +1050,12 @@
         // Check WebUSB for firmware update
         if (PicobootConnection.isSupported()) {
             log('WebUSB supported. Firmware flashing available.');
+
+            // Proactively show Windows driver note
+            if (navigator.userAgent.includes('Windows')) {
+                const winHelp = document.getElementById('fw-windows-help');
+                if (winHelp) winHelp.style.display = '';
+            }
         } else {
             log('WebUSB not supported. Firmware flashing will not be available.', 'warning');
         }
