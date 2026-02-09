@@ -11,7 +11,7 @@ Web-based configuration interface for [PicoCTR](https://github.com/ACustomArcade
 - **Live preview** — changes apply instantly without saving
 - **Save to flash** — persist settings across power cycles
 - **Device info** — shows firmware version, board name, build type
-- **Firmware update** — enter BOOTSEL mode directly from the browser
+- **Firmware update** — enter flash mode directly from the browser
 - **Auto-generated config** — settings and supported devices are parsed from firmware source annotations
 
 ## Browser Requirements

@@ -149,7 +149,7 @@
                 <button id="btn-reset" class="btn btn-warning" title="Reset to factory defaults">
                     <span class="btn-icon">🔧</span> Reset Defaults
                 </button>
-                <button id="btn-bootsel" class="btn btn-danger" title="Reboot into firmware update mode (device will disconnect)">
+                <button id="btn-bootsel" class="btn btn-danger" title="Reboot into flash mode for firmware update (device will disconnect)">
                     <span class="btn-icon">📦</span> Update Firmware
                 </button>
             </div>
@@ -159,43 +159,44 @@
         <section id="firmware-section" class="card" style="display: none;">
             <h2>Firmware Update</h2>
             <p class="firmware-description">
-                Flash new firmware via the PICOBOOT protocol over WebUSB.
-                The device must be in BOOTSEL mode (hold BOOTSEL button while plugging in, or use the button above).
+                Flash new firmware directly from your browser.
+                The device must be in flash mode — hold the BOOT button while plugging it in, or use the Update Firmware button above.
             </p>
 
             <div id="fw-windows-help" class="fw-windows-help" style="display: none;">
                 <details>
-                    <summary>⚠️ Windows: PICOBOOT driver required</summary>
+                    <summary>⚠️ Windows: USB driver setup required</summary>
                     <p>
-                        Windows requires the <strong>WinUSB</strong> driver for the PICOBOOT interface.
-                        Without it, the browser cannot communicate with the device for flashing.
+                        Windows requires the <strong>WinUSB</strong> driver for the flash mode interface.
+                        Without it, the browser cannot communicate with the device.
                     </p>
                     <ol>
                         <li>Download and run <a href="https://zadig.akeo.ie/" target="_blank" rel="noopener">Zadig</a></li>
-                        <li>Put your device in BOOTSEL mode (hold BOOTSEL while plugging in)</li>
+                        <li>Put your device in flash mode (hold BOOT while plugging in)</li>
                         <li>In Zadig, select <strong>Options → List All Devices</strong></li>
                         <li>Select <strong>"RP2 Boot (Interface 1)"</strong> from the dropdown</li>
                         <li>Set the driver to <strong>WinUSB</strong> and click <strong>Replace Driver</strong></li>
-                        <li>Unplug and re-plug the device in BOOTSEL mode, then try connecting again</li>
+                        <li>Unplug and re-plug the device, then try again</li>
                     </ol>
                     <p class="fw-windows-alt">
                         <strong>Alternative:</strong> You can also flash by dragging the .uf2 file onto the
-                        <strong>RPI-RP2</strong> drive that appears in File Explorer when in BOOTSEL mode.
+                        <strong>RPI-RP2</strong> drive that appears in File Explorer when in flash mode.
                     </p>
                 </details>
             </div>
 
             <div class="firmware-steps">
-                <!-- Step 1: Connect BOOTSEL device -->
+                <!-- Step 1: Connect device in flash mode -->
                 <div class="firmware-step" id="fw-step-connect">
                     <div class="step-header">
                         <span class="step-number">1</span>
-                        <span class="step-title">Connect device in BOOTSEL mode</span>
+                        <span class="step-title">Connect device in flash mode</span>
                     </div>
                     <div class="step-content">
                         <button id="btn-fw-connect" class="btn btn-primary">
-                            <span class="btn-icon">🔌</span> Connect BOOTSEL Device
+                            <span class="btn-icon">🔌</span> Connect Device
                         </button>
+                        <div id="fw-connect-status" class="fw-connect-status" style="display: none;"></div>
                         <div id="fw-device-info" class="fw-device-info" style="display: none;">
                             <span class="status-dot connected"></span>
                             <span id="fw-device-name">—</span>
@@ -204,7 +205,7 @@
                 </div>
 
                 <!-- Step 2: Select UF2 file -->
-                <div class="firmware-step" id="fw-step-file">
+                <div class="firmware-step fw-step-hidden" id="fw-step-file">
                     <div class="step-header">
                         <span class="step-number">2</span>
                         <span class="step-title">Select firmware</span>
@@ -262,7 +263,7 @@
                 </div>
 
                 <!-- Step 3: Flash -->
-                <div class="firmware-step" id="fw-step-flash">
+                <div class="firmware-step fw-step-hidden" id="fw-step-flash">
                     <div class="step-header">
                         <span class="step-number">3</span>
                         <span class="step-title">Flash firmware</span>
@@ -282,7 +283,7 @@
             </div>
 
             <div id="fw-platform-note" class="fw-platform-note">
-                <strong>Note:</strong> On Windows, you may need to install a WinUSB driver for the RP2040 BOOTSEL device
+                <strong>Note:</strong> On Windows, you may need to install a WinUSB driver for the flash mode device
                 using <a href="https://zadig.akeo.ie/" target="_blank" rel="noopener">Zadig</a>.
                 Linux and macOS typically work without additional drivers.
             </div>

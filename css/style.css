@@ -732,6 +732,34 @@ footer a:hover {
     padding: 1rem;
 }
 
+/* Hidden step (not yet reached) */
+.fw-step-hidden {
+    display: none;
+}
+
+/* Inline connection status message */
+.fw-connect-status {
+    margin-top: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.85rem;
+    line-height: 1.4;
+    border-radius: var(--radius-sm);
+}
+
+.fw-connect-status--info {
+    color: var(--color-text-muted);
+}
+
+.fw-connect-status--error {
+    color: var(--color-error, #ff6b6b);
+    background: rgba(255, 107, 107, 0.08);
+    border: 1px solid rgba(255, 107, 107, 0.2);
+}
+
+.fw-connect-status--success {
+    color: var(--color-success);
+}
+
 /* File picker */
 .file-picker {
     display: flex;

@@ -96,6 +96,7 @@
         fwStepConnect: $('#fw-step-connect'),
         fwStepFile: $('#fw-step-file'),
         fwStepFlash: $('#fw-step-flash'),
+        fwConnectStatus: $('#fw-connect-status'),
         // Firmware release list
         fwReleaseLoading: $('#fw-release-loading'),
         fwReleaseError: $('#fw-release-error'),
@@ -435,17 +436,17 @@
     }
 
     async function enterBootsel() {
-        if (!confirm('Update firmware?\n\nThe device will disconnect and reboot into firmware update mode.\nYou can then flash a new .uf2 firmware via the Firmware Update section below.')) {
+        if (!confirm('Update firmware?\n\nThe device will disconnect and reboot into flash mode.\nYou can then flash a new firmware via the Firmware Update section below.')) {
             return;
         }
         try {
-            log('Entering BOOTSEL mode...');
+            log('Entering flash mode...');
             await picoctr.enterBootsel();
-            log('Device entered BOOTSEL mode. Use the Firmware Update section below to flash new firmware.', 'warning');
+            log('Device entered flash mode. Use the Firmware Update section below to flash new firmware.', 'warning');
             showFirmwareSection();
         } catch (err) {
             // Device disconnects immediately, so errors are expected
-            log('Device entered BOOTSEL mode. Use the Firmware Update section below to flash new firmware.', 'warning');
+            log('Device entered flash mode. Use the Firmware Update section below to flash new firmware.', 'warning');
             showFirmwareSection();
         }
     }
@@ -460,13 +461,13 @@
     }
 
     /**
-     * Bootstrap mode: for brand-new devices already in BOOTSEL mode.
+     * Bootstrap mode: for brand-new devices already in flash mode.
      * Shows the firmware section and immediately opens the WebUSB device picker.
      */
     async function handleBootstrap() {
-        log('Bootstrap mode: looking for device in BOOTSEL mode...', 'info');
+        log('Bootstrap mode: looking for device in flash mode...', 'info');
         showFirmwareSection();
-        // Immediately trigger the BOOTSEL device connection
+        // Immediately trigger the device connection
         await handleFwConnect();
     }
 
@@ -537,56 +538,79 @@
         return isWindows && isDriverError;
     }
 
+    /**
+     * Show an inline status message under the Connect button.
+     * @param {string} message - The message to show (empty to hide)
+     * @param {'info'|'error'|'success'|''} type - Message type for styling
+     */
+    function _setConnectStatus(message, type = '') {
+        if (!message) {
+            dom.fwConnectStatus.style.display = 'none';
+            dom.fwConnectStatus.textContent = '';
+            dom.fwConnectStatus.className = 'fw-connect-status';
+            return;
+        }
+        dom.fwConnectStatus.textContent = message;
+        dom.fwConnectStatus.className = 'fw-connect-status';
+        if (type) dom.fwConnectStatus.classList.add('fw-connect-status--' + type);
+        dom.fwConnectStatus.style.display = '';
+    }
+
     async function handleFwConnect() {
         if (!PicobootConnection.isSupported()) {
+            _setConnectStatus('WebUSB is not supported in this browser.', 'error');
             log('WebUSB is not supported in this browser', 'error');
             return;
         }
 
         try {
-            log('Requesting BOOTSEL device connection via WebUSB...');
+            _setConnectStatus('Waiting for device selection...', 'info');
+            dom.btnFwConnect.disabled = true;
             picoboot = new PicobootConnection();
 
             const device = await picoboot.connect();
-            const name = device.productName || 'RP2040 BOOTSEL';
+            const name = device.productName || 'RP2040';
             dom.fwDeviceInfo.style.display = '';
             dom.fwDeviceName.textContent = name;
             dom.btnFwBrowse.disabled = false;
-
-            // Enable source tabs (no longer exist, but kept for safety)
-            // dom.fwTabGithub.disabled = false;
-            // dom.fwTabLocal.disabled = false;
+            _setConnectStatus('');  // clear status on success
 
             setFirmwareStepState(dom.fwStepConnect, 'complete');
             setFirmwareStepState(dom.fwStepFile, 'active');
 
-            log(`BOOTSEL device connected: ${name}`, 'success');
+            // Reveal step 2
+            dom.fwStepFile.classList.remove('fw-step-hidden');
+
+            log(`Device connected: ${name}`, 'success');
 
             // Start loading firmware list in background
             loadFirmwareList();
 
             // Handle disconnection
             picoboot.onDisconnect(() => {
-                log('BOOTSEL device disconnected', 'warning');
+                log('Device disconnected from flash mode', 'warning');
                 if (!isFlashing) {
                     resetFirmwareUI();
                 }
             });
         } catch (err) {
             if (err.name === 'NotFoundError' || err.message?.includes('No device selected')) {
-                log('BOOTSEL device selection cancelled', 'warning');
+                _setConnectStatus('Device selection cancelled. Click Connect to try again.', 'info');
             } else if (_isWindowsDriverError(err)) {
-                log('BOOTSEL connection failed: Windows cannot access the PICOBOOT USB interface. ' +
-                    'This usually means the WinUSB driver is not installed for the PICOBOOT interface. ' +
-                    'Use Zadig (zadig.akeo.ie) to install the WinUSB driver for the "RP2 Boot (Interface 1)" device, ' +
-                    'or drag-and-drop the UF2 file onto the RPI-RP2 drive instead.', 'error');
-                // Show the Windows help note if it exists
+                _setConnectStatus(
+                    'Could not connect: Windows needs the WinUSB driver installed. ' +
+                    'See the driver setup instructions below, then unplug and re-plug the device.',
+                    'error'
+                );
                 const winHelp = document.getElementById('fw-windows-help');
                 if (winHelp) winHelp.style.display = '';
             } else {
-                log(`BOOTSEL connection failed: ${err.message}`, 'error');
+                _setConnectStatus('Connection failed: ' + err.message, 'error');
+                log(`Connection failed: ${err.message}`, 'error');
             }
             picoboot = null;
+        } finally {
+            dom.btnFwConnect.disabled = false;
         }
     }
 
@@ -667,6 +691,7 @@
 
                 setFirmwareStepState(dom.fwStepFile, 'complete');
                 setFirmwareStepState(dom.fwStepFlash, 'active');
+                dom.fwStepFlash.classList.remove('fw-step-hidden');
 
                 log(`UF2 loaded: ${file.name} (${summary})`, 'success');
             } catch (err) {
@@ -804,6 +829,7 @@
 
             setFirmwareStepState(dom.fwStepFile, 'complete');
             setFirmwareStepState(dom.fwStepFlash, 'active');
+            dom.fwStepFlash.classList.remove('fw-step-hidden');
 
             log(`Firmware ready: ${asset.displayName} (${summary})`, 'success');
         } catch (err) {

@@ -72,7 +72,7 @@
       "id": "0xF8",
       "size": 8,
       "direction": "out",
-      "description": "Enter BOOTSEL firmware update mode"
+      "description": "Enter firmware update mode"
     },
     "version": {
       "id": "0xF9",
