@@ -407,6 +407,24 @@ class PicobootConnection {
         }
     }
 
+    /**
+     * Reboot the device into normal mode (run user firmware from flash).
+     * Uses pc=0 to boot from flash and sp=SRAM_END (0x20042000) for RP2040.
+     * The device will disconnect from USB and re-enumerate as the normal
+     * HID device after rebooting.
+     *
+     * Resets the interface first to clear any stalled endpoints from prior
+     * operations (e.g. flash reads), matching picoflash/picotool behavior.
+     * @param {number} delayMs - Delay in milliseconds before reboot
+     */
+    async rebootToNormal(delayMs = 500) {
+        // Reset the interface to recover from any prior endpoint stalls
+        await this._resetInterface();
+        // RP2040 SRAM ends at 0x20042000 — used as default stack pointer
+        const RP2040_SRAM_END = 0x20042000;
+        await this.reboot(0, RP2040_SRAM_END, delayMs);
+    }
+
     // ========================================================================
     // Installed Firmware Info (read from flash)
     // ========================================================================

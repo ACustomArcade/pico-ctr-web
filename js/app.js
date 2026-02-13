@@ -76,9 +76,11 @@
         btnApply: $('#btn-apply'),
         btnRead: $('#btn-read'),
         btnReset: $('#btn-reset'),
+        btnUndo: $('#btn-undo'),
         btnBootsel: $('#btn-bootsel'),
         btnClearLog: $('#btn-clear-log'),
         btnBootstrap: $('#btn-bootstrap'),
+        bootstrapLink: $('#bootstrap-link'),
         // Apply dialog
         applyDialog: $('#apply-dialog'),
         applyDialogCancel: $('#apply-dialog-cancel'),
@@ -175,8 +177,9 @@
         dom.settingsSection.style.display = isConnected ? '' : 'none';
         dom.pinMappingSection.style.display = isConnected ? '' : 'none';
         dom.actionsSection.style.display = isConnected ? '' : 'none';
+        if (dom.bootstrapLink) dom.bootstrapLink.style.display = isConnected ? 'none' : '';
 
-        [dom.btnApply, dom.btnRead, dom.btnReset, dom.btnBootsel].forEach(btn => {
+        [dom.btnApply, dom.btnRead, dom.btnReset, dom.btnUndo, dom.btnBootsel].forEach(btn => {
             if (btn) btn.disabled = !isConnected;
         });
     }
@@ -792,6 +795,23 @@
         }
     }
 
+    async function undoChanges() {
+        if (!confirm('Undo all pending changes?\n\nThe device will reboot and reload saved settings.\nAny unsaved changes will be lost.')) {
+            return;
+        }
+        try {
+            log('Rebooting device to undo changes...');
+            await picoctr.reboot();
+            log('Device is rebooting...', 'warning');
+        } catch (err) {
+            log('Device is rebooting...', 'warning');
+        }
+        setConnected(false);
+        // Give device time to reboot, then prompt reconnect
+        await new Promise(r => setTimeout(r, 2000));
+        log('Device rebooted. Please reconnect.', 'info');
+    }
+
     async function enterBootsel() {
         if (!confirm('Update firmware?\n\nThe device will disconnect and reboot into flash mode.\nYou can then flash a new firmware via the Firmware Update section below.')) {
             return;
@@ -799,12 +819,12 @@
         try {
             log('Entering flash mode...');
             await picoctr.enterBootsel();
-            log('Device entered flash mode. Use the Firmware Update section below to flash new firmware.', 'warning');
-            showFirmwareSection();
+            log('Device entered flash mode.', 'warning');
         } catch (err) {
-            log('Device entered flash mode. Use the Firmware Update section below to flash new firmware.', 'warning');
-            showFirmwareSection();
+            log('Device entered flash mode.', 'warning');
         }
+        showFirmwareSection();
+        await handleFwConnect();
     }
 
     // ========================================================================
@@ -827,6 +847,21 @@
         dom.firmwareSection.style.display = 'none';
         dom.connectionSection.style.display = '';
         resetFirmwareUI();
+    }
+
+    async function returnToConfigMode() {
+        if (picoboot) {
+            try {
+                log('Rebooting device to normal mode...', 'info');
+                dom.btnFwReturn.disabled = true;
+                await picoboot.rebootToNormal();
+                log('Device is rebooting. It will re-appear as a HID device.', 'success');
+            } catch (err) {
+                // Errors are expected — the device disconnects immediately on reboot
+                log('Reboot command sent.', 'info');
+            }
+        }
+        hideFirmwareSection();
     }
 
     function resetFirmwareUI() {
@@ -852,6 +887,9 @@
         if (dom.fwReleaseList) dom.fwReleaseList.innerHTML = '';
 
         dom.btnFwFlash.disabled = true;
+        dom.btnFwReturn.disabled = false;
+        dom.btnFwConnect.style.display = '';
+        dom.btnFwConnect.disabled = false;
         dom.fwProgressContainer.style.display = 'none';
         dom.fwProgressFill.style.width = '0%';
         dom.fwProgressFill.className = 'fw-progress-fill';
@@ -860,6 +898,10 @@
         setFirmwareStepState(dom.fwStepConnect, 'active');
         setFirmwareStepState(dom.fwStepFile, '');
         setFirmwareStepState(dom.fwStepFlash, '');
+
+        // Re-hide steps 2 and 3 until device is connected
+        if (dom.fwStepFile) dom.fwStepFile.classList.add('fw-step-hidden');
+        if (dom.fwStepFlash) dom.fwStepFlash.classList.add('fw-step-hidden');
 
         if (picoboot) {
             picoboot.disconnect().catch(() => {});
@@ -915,6 +957,7 @@
             dom.fwDeviceInfo.style.display = '';
             dom.fwDeviceName.textContent = name;
             dom.btnFwBrowse.disabled = false;
+            dom.btnFwConnect.style.display = 'none';
             _setConnectStatus('');
 
             setFirmwareStepState(dom.fwStepConnect, 'complete');
@@ -1016,12 +1059,8 @@
         } else {
             dom.fwInfoRowVersion.style.display = 'none';
         }
-        if (info.git) {
-            dom.fwInfoGit.textContent = info.git;
-            dom.fwInfoRowGit.style.display = '';
-        } else {
-            dom.fwInfoRowGit.style.display = 'none';
-        }
+        // Hide git info in UF2 details — version is sufficient
+        dom.fwInfoRowGit.style.display = 'none';
 
         dom.fwInfoSize.textContent = formatBytes(info.totalSize);
         dom.fwFileInfo.style.display = '';
@@ -1382,6 +1421,7 @@
             await readPinMappings();
         });
         dom.btnReset.addEventListener('click', resetSettings);
+        dom.btnUndo.addEventListener('click', undoChanges);
         dom.btnBootsel.addEventListener('click', enterBootsel);
         dom.btnClearLog.addEventListener('click', () => {
             dom.logOutput.innerHTML = '';
@@ -1399,7 +1439,7 @@
         dom.fwFileInput.addEventListener('change', handleFwFileSelect);
         dom.btnFwFlash.addEventListener('click', handleFwFlash);
         dom.btnBootstrap.addEventListener('click', handleBootstrap);
-        dom.btnFwReturn.addEventListener('click', () => hideFirmwareSection());
+        dom.btnFwReturn.addEventListener('click', returnToConfigMode);
 
         setConnected(false);
         log('WebUSB supported. Ready to connect.');

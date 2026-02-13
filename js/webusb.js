@@ -376,6 +376,16 @@ class PicoCTRDevice {
         return this.sendCommand({ cmd: 'reset' });
     }
 
+    /** Reboot the device (discards unsaved changes, device will disconnect!). */
+    async reboot() {
+        try {
+            return await this.sendCommand({ cmd: 'reboot' });
+        } catch {
+            // Expected: device disconnects before response arrives
+            return { ok: true };
+        }
+    }
+
     /** Enter BOOTSEL mode for firmware update (device will disconnect!). */
     async enterBootsel() {
         try {

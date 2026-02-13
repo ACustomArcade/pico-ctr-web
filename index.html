@@ -40,7 +40,7 @@
                 <span class="status-dot disconnected"></span>
                 <span class="status-text">Not connected</span>
             </div>
-            <div class="bootstrap-link">
+            <div id="bootstrap-link" class="bootstrap-link">
                 <span>New device without firmware?</span>
                 <button id="btn-bootstrap" class="btn btn-ghost btn-small">
                     <span class="btn-icon">🆕</span> Setup New Device
@@ -184,6 +184,11 @@
                 <button id="btn-apply" class="btn btn-primary" title="Send settings to device (preview without saving)">
                     <span class="btn-icon">⚡</span> Apply
                 </button>
+                <button id="btn-undo" class="btn btn-secondary" title="Discard unsaved changes by rebooting the device">
+                    <span class="btn-icon">↩️</span> Undo Changes
+                </button>
+            </div>
+            <div class="action-buttons">
                 <button id="btn-read" class="btn btn-secondary" title="Re-read settings from device">
                     <span class="btn-icon">🔄</span> Refresh
                 </button>
