@@ -128,11 +128,9 @@
         fwReleaseLoading: $('#fw-release-loading'),
         fwReleaseError: $('#fw-release-error'),
         fwReleaseErrorMsg: $('#fw-release-error-msg'),
-        fwReleaseFallbackLink: $('#fw-release-fallback-link'),
         fwReleaseContent: $('#fw-release-content'),
         fwReleaseTag: $('#fw-release-tag'),
         fwReleaseDate: $('#fw-release-date'),
-        fwReleaseLink: $('#fw-release-link'),
         fwReleaseList: $('#fw-release-list'),
         btnFwReturn: $('#btn-fw-return'),
     };
@@ -640,6 +638,8 @@
             await readDeviceInfo();
             await readSettings();
             await readPinMappings();
+            // Check for firmware updates in the background
+            checkFirmwareUpdate();
         } catch (err) {
             if (err.message === 'No device selected') {
                 log('Connection cancelled by user', 'warning');
@@ -664,6 +664,81 @@
             dom.unsavedBanner.style.display = 'none';
         } catch (err) {
             log(`Disconnect error: ${err.message}`, 'error');
+        }
+    }
+
+    // ========================================================================
+    // Version Comparison
+    // ========================================================================
+
+    /**
+     * Parse a version string like "1.0.8", "2.0.0-rc1", "v2.0.0-rc1".
+     * Returns { major, minor, patch, pre } where pre is the prerelease string or null.
+     */
+    function parseVersion(v) {
+        if (!v || typeof v !== 'string') return null;
+        v = v.replace(/^v/i, '').trim();
+        const m = v.match(/^(\d+)\.(\d+)\.(\d+)(?:-(.+))?$/);
+        if (!m) return null;
+        return {
+            major: parseInt(m[1], 10),
+            minor: parseInt(m[2], 10),
+            patch: parseInt(m[3], 10),
+            pre: m[4] || null,
+            raw: v,
+        };
+    }
+
+    /**
+     * Compare two version strings. Returns:
+     *  -1 if a < b, 0 if equal, 1 if a > b.
+     * Prerelease versions are considered older than the same version without prerelease.
+     */
+    function compareVersions(a, b) {
+        const pa = parseVersion(a);
+        const pb = parseVersion(b);
+        if (!pa || !pb) return 0;  // can't compare, treat as equal
+
+        for (const k of ['major', 'minor', 'patch']) {
+            if (pa[k] < pb[k]) return -1;
+            if (pa[k] > pb[k]) return 1;
+        }
+        // Same base version — release > prerelease
+        if (!pa.pre && pb.pre) return 1;   // a is release, b is prerelease
+        if (pa.pre && !pb.pre) return -1;  // a is prerelease, b is release
+        if (pa.pre && pb.pre) {
+            return pa.pre < pb.pre ? -1 : pa.pre > pb.pre ? 1 : 0;
+        }
+        return 0;
+    }
+
+    /**
+     * After connecting, check if a newer firmware is available and prompt the user.
+     */
+    async function checkFirmwareUpdate() {
+        if (!deviceInfo || !deviceInfo.version) return;
+        try {
+            const manifest = await PicoCTRFirmwareReleases.loadManifest();
+            const { version } = PicoCTRFirmwareReleases.buildAssetList(manifest);
+
+            const latestVersion = parseVersion(version);
+            if (!latestVersion) return;
+
+            const cmp = compareVersions(deviceInfo.version, version);
+            if (cmp < 0) {
+                log(`Firmware update available: ${latestVersion.raw} (device has ${deviceInfo.version})`, 'warning');
+                const update = confirm(
+                    `A firmware update is available!\n\n` +
+                    `  Installed:  v${deviceInfo.version}\n` +
+                    `  Available:  v${latestVersion.raw}\n\n` +
+                    `Would you like to update now?`
+                );
+                if (update) {
+                    await enterBootsel();
+                }
+            }
+        } catch {
+            // Silently ignore — manifest may not be available
         }
     }
 
@@ -1134,7 +1209,7 @@
     }
 
     // ====================================================
-    // GitHub Releases
+    // Firmware List
     // ====================================================
 
     async function loadFirmwareList() {
@@ -1145,19 +1220,13 @@
 
         try {
             const manifest = await PicoCTRFirmwareReleases.loadManifest();
-            const { release, assets } = PicoCTRFirmwareReleases.buildAssetList(manifest);
-            latestRelease = { release, assets };
+            const { version, date, assets } = PicoCTRFirmwareReleases.buildAssetList(manifest);
+            latestRelease = { version, date, assets };
 
             if (assets.length === 0) throw new Error('No firmware files available');
 
-            dom.fwReleaseTag.textContent = release.tag;
-            if (release.date) dom.fwReleaseDate.textContent = new Date(release.date).toLocaleDateString();
-            if (release.url) {
-                dom.fwReleaseLink.href = release.url;
-                dom.fwReleaseLink.style.display = '';
-            } else {
-                dom.fwReleaseLink.style.display = 'none';
-            }
+            dom.fwReleaseTag.textContent = version ? `v${version}` : '';
+            if (date) dom.fwReleaseDate.textContent = new Date(date).toLocaleDateString();
 
             dom.fwReleaseList.innerHTML = '';
             const grouped = new Map();
@@ -1193,11 +1262,10 @@
 
             dom.fwReleaseLoading.style.display = 'none';
             dom.fwReleaseContent.style.display = '';
-            log(`${assets.length} firmware files available (${release.tag})`, 'success');
+            log(`${assets.length} firmware files available (v${version})`, 'success');
         } catch (err) {
             dom.fwReleaseLoading.style.display = 'none';
             dom.fwReleaseErrorMsg.textContent = err.message;
-            dom.fwReleaseFallbackLink.href = PicoCTRFirmwareReleases.getReleasesPageUrl();
             dom.fwReleaseError.style.display = '';
             log(`Failed to load firmware list: ${err.message}`, 'error');
         }

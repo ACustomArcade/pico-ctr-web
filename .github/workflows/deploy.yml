@@ -50,14 +50,18 @@ jobs:
 
           if [ -z "$RELEASE_JSON" ] || echo "$RELEASE_JSON" | jq -e '.message' >/dev/null 2>&1; then
             echo "::warning::No releases found in ${REPO}. Deploying without firmware."
-            echo '{"firmware":{},"release":{"tag":"none","date":"","repo":"'${REPO}'"}}' > firmware/manifest.json
+            echo '{"version":"","date":"","firmware":{}}' > firmware/firmware.json
             exit 0
           fi
 
           TAG=$(echo "$RELEASE_JSON" | jq -r '.tag_name')
           DATE=$(echo "$RELEASE_JSON" | jq -r '.published_at')
-          HTML_URL=$(echo "$RELEASE_JSON" | jq -r '.html_url')
           echo "Found release: ${TAG} (${DATE})"
+
+          # Extract version from tag (strip leading 'v')
+          VERSION=$(echo "$TAG" | sed 's/^v//' | grep -oE '^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?' || echo "")
+          RELEASE_DATE=$(echo "$DATE" | cut -dT -f1)
+          echo "Version: ${VERSION}, Date: ${RELEASE_DATE}"
 
           # Download all .uf2 assets
           ASSETS=$(echo "$RELEASE_JSON" | jq -c '.assets[] | select(.name | endswith(".uf2"))')
@@ -79,32 +83,22 @@ jobs:
           if [ -n "$MANIFEST_ASSET" ]; then
             MANIFEST_URL=$(echo "$MANIFEST_ASSET" | jq -r '.url')
             echo "Downloading firmware.json from release assets..."
-            gh api "$MANIFEST_URL" -H "Accept: application/octet-stream" > firmware/release-firmware.json
-            # Merge release metadata into the downloaded manifest
-            jq --arg tag "$TAG" --arg date "$DATE" --arg url "$HTML_URL" --arg repo "$REPO" \
-              '. + {release: {tag: $tag, date: $date, url: $url, repo: $repo}}' \
-              firmware/release-firmware.json > firmware/manifest.json
-            rm -f firmware/release-firmware.json
-          elif [ -f "firmware.json" ]; then
-            # Fallback: use committed firmware.json at repo root
-            echo "No firmware.json in release assets, using committed firmware.json..."
-            jq --arg tag "$TAG" --arg date "$DATE" --arg url "$HTML_URL" --arg repo "$REPO" \
-              '. + {release: {tag: $tag, date: $date, url: $url, repo: $repo}}' \
-              firmware.json > firmware/manifest.json
+            gh api "$MANIFEST_URL" -H "Accept: application/octet-stream" > firmware/firmware.json
+            echo "Using firmware.json from release (already contains version metadata)"
           else
-            echo "No firmware.json found, generating manifest from downloaded files..."
-            # Generate a basic manifest grouped by filename prefix as manufacturer
+            echo "No firmware.json in release assets, generating manifest from downloaded files..."
+            # Generate a basic manifest from downloaded UF2 files
             FILES_JSON=$(ls firmware/*.uf2 2>/dev/null | while read f; do
               basename "$f" | jq -R '{file: ., name: (. | sub("\\.uf2$";"") | split("-")[2:] | map(. / "" | first |= ascii_upcase | join("")) | join(" ")), dev: false}'
             done | jq -s '{Other: .}')
-            jq -n --arg tag "$TAG" --arg date "$DATE" --arg url "$HTML_URL" --arg repo "$REPO" \
+            jq -n --arg ver "$VERSION" --arg date "$RELEASE_DATE" \
               --argjson fw "$FILES_JSON" \
-              '{firmware: $fw, release: {tag: $tag, date: $date, url: $url, repo: $repo}}' \
-              > firmware/manifest.json
+              '{version: $ver, date: $date, firmware: $fw}' \
+              > firmware/firmware.json
           fi
 
-          echo "Manifest:"
-          cat firmware/manifest.json
+          echo "Firmware manifest:"
+          cat firmware/firmware.json
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

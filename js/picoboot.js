@@ -988,23 +988,23 @@ class PicobootConnection {
  * Loads PicoCTR firmware from the same-origin /firmware/ directory.
  *
  * The deploy workflow downloads release assets from GitHub and places them
- * alongside a manifest.json in /firmware/. All fetches are same-origin —
+ * alongside a firmware.json in /firmware/. All fetches are same-origin —
  * no CORS issues.
  */
 // eslint-disable-next-line no-unused-vars
 class PicoCTRFirmwareReleases {
     static FIRMWARE_DIR = 'firmware';
-    static MANIFEST_PATH = 'firmware/manifest.json';
+    static MANIFEST_PATH = 'firmware/firmware.json';
 
     /**
      * Load the firmware manifest (built during deploy).
-     * Contains firmware list + release metadata (tag, date, URL, repo).
-     * @returns {Promise<Object>} Parsed manifest
+     * Contains firmware list + version metadata.
+     * @returns {Promise<Object>} Parsed firmware.json
      */
     static async loadManifest() {
         const resp = await fetch(this.MANIFEST_PATH);
         if (!resp.ok) {
-            throw new Error('Firmware manifest not found. The site may not have been deployed yet.');
+            throw new Error('Firmware manifest not found.');
         }
         return await resp.json();
     }
@@ -1012,11 +1012,12 @@ class PicoCTRFirmwareReleases {
     /**
      * Build the asset list from the manifest, with resolved metadata.
      * Supports manufacturer-grouped format: { firmware: { "AtGames": [...], ... } }
-     * @param {Object} manifest - The loaded manifest.json
-     * @returns {{ release: Object, assets: Array }}
+     * @param {Object} manifest - The loaded firmware.json
+     * @returns {{ version: string, date: string, assets: Array }}
      */
     static buildAssetList(manifest) {
-        const release = manifest.release || {};
+        const version = manifest.version || '';
+        const date = manifest.date || '';
         const firmwareData = manifest.firmware || {};
         const assets = [];
 
@@ -1049,15 +1050,7 @@ class PicoCTRFirmwareReleases {
             }
         }
 
-        return {
-            release: {
-                tag: release.tag || 'unknown',
-                date: release.date || '',
-                url: release.url || '',
-                repo: release.repo || '',
-            },
-            assets,
-        };
+        return { version, date, assets };
     }
 
     /**
@@ -1074,12 +1067,4 @@ class PicoCTRFirmwareReleases {
         return await resp.arrayBuffer();
     }
 
-    /**
-     * Get the releases page URL for manual download.
-     * @param {string} [repo] - Optional "owner/name" override
-     * @returns {string}
-     */
-    static getReleasesPageUrl(repo) {
-        return `https://github.com/${repo || 'ACustomArcade/pico-ctr-web'}/releases`;
-    }
 }
