@@ -3,6 +3,8 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [main]
+  release:
+    types: [published, edited]
   workflow_dispatch:
     inputs:
       firmware_repo:
@@ -27,6 +29,8 @@ env:
 
 jobs:
   deploy:
+    # Skip pre-releases — only deploy when the release is marked as latest
+    if: github.event_name != 'release' || (!github.event.release.prerelease && github.event.release.draft == false)
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
