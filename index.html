@@ -20,7 +20,7 @@
         <!-- Browser Support Warning -->
         <div id="browser-warning" class="card warning-card" style="display: none;">
             <h2>⚠️ Browser Not Supported</h2>
-            <p>WebHID is required for USB communication. Please use <strong>Google Chrome</strong> or <strong>Microsoft Edge</strong> (version 89+).</p>
+            <p>WebUSB is required for USB communication. Please use <strong>Google Chrome</strong> or <strong>Microsoft Edge</strong> (version 89+).</p>
         </div>
 
         <!-- Connection Section -->
@@ -57,6 +57,10 @@
                     <span id="info-board">—</span>
                 </div>
                 <div class="info-item">
+                    <label>Variant</label>
+                    <span id="info-variant">—</span>
+                </div>
+                <div class="info-item">
                     <label>Firmware Version</label>
                     <span id="info-version">—</span>
                 </div>
@@ -67,6 +71,10 @@
                 <div class="info-item">
                     <label>USB ID</label>
                     <span id="info-usb-id">—</span>
+                </div>
+                <div class="info-item">
+                    <label>Gamepads</label>
+                    <span id="info-gamepads">—</span>
                 </div>
             </div>
         </section>
@@ -104,15 +112,15 @@
                         <div class="color-rgb-inputs">
                             <div class="color-channel">
                                 <label for="setting-rgb_color_r">R</label>
-                                <input type="number" id="setting-rgb_color_r" class="form-input-small" min="0" max="255" data-field="rgb_color_r">
+                                <input type="number" id="setting-rgb_color_r" class="form-input-small" min="0" max="255" data-field="rgb_r">
                             </div>
                             <div class="color-channel">
                                 <label for="setting-rgb_color_g">G</label>
-                                <input type="number" id="setting-rgb_color_g" class="form-input-small" min="0" max="255" data-field="rgb_color_g">
+                                <input type="number" id="setting-rgb_color_g" class="form-input-small" min="0" max="255" data-field="rgb_g">
                             </div>
                             <div class="color-channel">
                                 <label for="setting-rgb_color_b">B</label>
-                                <input type="number" id="setting-rgb_color_b" class="form-input-small" min="0" max="255" data-field="rgb_color_b">
+                                <input type="number" id="setting-rgb_color_b" class="form-input-small" min="0" max="255" data-field="rgb_b">
                             </div>
                             <div class="color-hex" id="color-hex-display">#ff0000</div>
                         </div>
@@ -134,6 +142,39 @@
                     </div>
                 </div>
             </div>
+        </section>
+
+        <!-- Button Mapping Section -->
+        <section id="pin-mapping-section" class="card" style="display: none;">
+            <details id="button-mapping-accordion" class="mapping-accordion">
+                <summary class="mapping-accordion-header">
+                    <h2>Button Mapping</h2>
+                    <span class="accordion-hint">Click to expand</span>
+                </summary>
+                <p class="section-desc">Remap what each button does. Changes are applied with the Apply button below.</p>
+                <div class="mapping-toolbar">
+                    <button id="btn-mapping-export" class="btn btn-ghost btn-small" title="Export mapping to file">
+                        <span class="btn-icon">📤</span> Export
+                    </button>
+                    <button id="btn-mapping-import" class="btn btn-ghost btn-small" title="Import mapping from file">
+                        <span class="btn-icon">📥</span> Import
+                    </button>
+                    <input type="file" id="mapping-file-input" accept=".json" style="display: none;">
+                </div>
+                <div class="pin-mapping-table-wrapper">
+                    <table class="pin-mapping-table">
+                        <thead>
+                            <tr>
+                                <th class="pin-col-label">Button</th>
+                                <th class="pin-col-type">Output Type</th>
+                                <th class="pin-col-target">Target</th>
+                                <th class="pin-col-code">Code</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pin-mapping-body"></tbody>
+                    </table>
+                </div>
+            </details>
         </section>
 
         <!-- Actions Section -->
@@ -201,6 +242,24 @@
                             <span class="status-dot connected"></span>
                             <span id="fw-device-name">—</span>
                         </div>
+                        <div id="fw-installed-info" class="fw-installed-info" style="display: none;">
+                            <div class="fw-installed-header">Currently Installed</div>
+                            <div class="fw-info-row" id="fw-installed-row-variant" style="display: none;">
+                                <span>Variant:</span><span id="fw-installed-variant">—</span>
+                            </div>
+                            <div class="fw-info-row" id="fw-installed-row-board" style="display: none;">
+                                <span>Board:</span><span id="fw-installed-board">—</span>
+                            </div>
+                            <div class="fw-info-row" id="fw-installed-row-version" style="display: none;">
+                                <span>Version:</span><span id="fw-installed-version">—</span>
+                            </div>
+                            <div class="fw-info-row" id="fw-installed-row-git" style="display: none;">
+                                <span>Git:</span><span id="fw-installed-git">—</span>
+                            </div>
+                            <div id="fw-installed-loading" class="fw-installed-loading">
+                                <span class="spinner"></span> Reading installed firmware...
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -246,6 +305,9 @@
                             <div class="fw-info-row" id="fw-info-row-board" style="display: none;">
                                 <span>Board:</span><span id="fw-info-board">—</span>
                             </div>
+                            <div class="fw-info-row" id="fw-info-row-variant" style="display: none;">
+                                <span>Variant:</span><span id="fw-info-variant">—</span>
+                            </div>
                             <div class="fw-info-row" id="fw-info-row-version" style="display: none;">
                                 <span>Firmware Version:</span><span id="fw-info-version">—</span>
                             </div>
@@ -287,6 +349,12 @@
                 using <a href="https://zadig.akeo.ie/" target="_blank" rel="noopener">Zadig</a>.
                 Linux and macOS typically work without additional drivers.
             </div>
+
+            <div class="fw-return">
+                <button id="btn-fw-return" class="btn btn-secondary">
+                    <span class="btn-icon">↩️</span> Return to Config Mode
+                </button>
+            </div>
         </section>
 
         <!-- Log Section -->
@@ -303,7 +371,7 @@
 
     <footer>
         <p>PicoCTR Web Configurator</p>
-        <p class="footer-note">Requires Chrome or Edge with WebHID &amp; WebUSB support</p>
+        <p class="footer-note">Requires Chrome or Edge with WebUSB support</p>
     </footer>
 
     <!-- Apply Confirmation Dialog -->
@@ -322,7 +390,7 @@
     </dialog>
 
     <script src="js/picoboot.js"></script>
-    <script src="js/webhid.js"></script>
+    <script src="js/webusb.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>

@@ -408,6 +408,62 @@ class PicobootConnection {
     }
 
     // ========================================================================
+    // Installed Firmware Info (read from flash)
+    // ========================================================================
+
+    /**
+     * Read installed firmware binary info from the device's flash.
+     * Reads flash memory and scans for embedded "Board: ", "Variant: ",
+     * "Git: " strings and version info placed by bi_decl() macros.
+     *
+     * Must be called after connect(). Handles exitXip() internally.
+     *
+     * @param {Function} [onProgress] - Optional progress callback (current, total)
+     * @returns {Promise<{ board: string|null, variant: string|null, version: string|null, git: string|null, isPicoCTR: boolean }>}
+     */
+    async readInstalledFirmwareInfo(onProgress = () => {}) {
+        const FLASH_BASE = 0x10000000;
+        const READ_SIZE = 4096;           // Read 4KB chunks
+        const MAX_READ = 256 * 1024;      // Scan first 256KB of flash
+        const totalChunks = MAX_READ / READ_SIZE;
+
+        // Prepare flash for reading
+        await this.exclusiveAccess(true);
+        await this.exitXip();
+
+        // Read flash in chunks and wrap as pseudo-UF2 blocks for extractBinaryInfo
+        const blocks = [];
+        for (let offset = 0; offset < MAX_READ; offset += READ_SIZE) {
+            onProgress(offset / READ_SIZE, totalChunks);
+            try {
+                const data = await this.flashRead(FLASH_BASE + offset, READ_SIZE);
+                blocks.push({
+                    addr: FLASH_BASE + offset,
+                    data: new Uint8Array(data),
+                });
+            } catch (err) {
+                // Stop reading on error (e.g., past end of flash content)
+                console.warn(`Flash read stopped at offset 0x${offset.toString(16)}: ${err.message}`);
+                break;
+            }
+        }
+
+        // Release exclusive access
+        try {
+            await this.exclusiveAccess(false);
+        } catch (_) { /* ignore */ }
+
+        onProgress(totalChunks, totalChunks);
+
+        if (blocks.length === 0) {
+            return { board: null, variant: null, version: null, git: null, isPicoCTR: false };
+        }
+
+        // Reuse the same binary info extraction logic used for UF2 files
+        return PicobootConnection.extractBinaryInfo(blocks);
+    }
+
+    // ========================================================================
     // UF2 Parser
     // ========================================================================
 
@@ -510,10 +566,11 @@ class PicobootConnection {
      *            and extractBoardFromUF2()
      *
      * @param {Array<{addr: number, data: Uint8Array}>} blocks - Parsed UF2 blocks
-     * @returns {{ board: string|null, version: string|null, git: string|null, isPicoCTR: boolean }}
+     * @returns {{ board: string|null, variant: string|null, version: string|null, git: string|null, isPicoCTR: boolean }}
      */
     static extractBinaryInfo(blocks) {
         let board = null;
+        let variant = null;
         let version = null;
         let git = null;
 
@@ -551,6 +608,37 @@ class PicobootConnection {
                     }
                     if (name.length > 0) {
                         board = name;
+                    }
+                }
+
+                // Check for "Variant: " (0x56 0x61 0x72 0x69 0x61 0x6E 0x74 0x3A 0x20)
+                if (!variant && i < len - 9 &&
+                    payload[i]     === 0x56 && // V
+                    payload[i + 1] === 0x61 && // a
+                    payload[i + 2] === 0x72 && // r
+                    payload[i + 3] === 0x69 && // i
+                    payload[i + 4] === 0x61 && // a
+                    payload[i + 5] === 0x6E && // n
+                    payload[i + 6] === 0x74 && // t
+                    payload[i + 7] === 0x3A && // :
+                    payload[i + 8] === 0x20) { // space
+                    let j = i + 9;
+                    while (j < len && (payload[j] === 0x20 || payload[j] === 0x09)) j++;
+                    let name = '';
+                    while (j < len) {
+                        const c = payload[j];
+                        if ((c >= 0x41 && c <= 0x5A) ||  // A-Z
+                            (c >= 0x61 && c <= 0x7A) ||  // a-z
+                            (c >= 0x30 && c <= 0x39) ||  // 0-9
+                            c === 0x5F || c === 0x2D) {  // _ -
+                            name += String.fromCharCode(c);
+                            j++;
+                        } else {
+                            break;
+                        }
+                    }
+                    if (name.length > 0) {
+                        variant = name;
                     }
                 }
 
@@ -656,7 +744,7 @@ class PicobootConnection {
             }
 
             // Early exit if we found everything
-            if (board && version && git) break;
+            if (board && variant && version && git) break;
         }
 
         // Fallback: scan all blocks for X.Y.Z version pattern if binary info didn't find it
@@ -713,6 +801,7 @@ class PicobootConnection {
 
         return {
             board,
+            variant,
             version,
             git,
             isPicoCTR: !!(board && (board.toLowerCase().includes('picoctr') ||
@@ -725,7 +814,7 @@ class PicobootConnection {
     /**
      * Get human-readable info about a UF2 file, including PicoCTR binary info.
      * @param {ArrayBuffer} uf2Data
-     * @returns {{ blocks: number, familyId: string, minAddr: string, maxAddr: string, totalSize: number, board: string|null, version: string|null, git: string|null, isPicoCTR: boolean }}
+     * @returns {{ blocks: number, familyId: string, minAddr: string, maxAddr: string, totalSize: number, board: string|null, variant: string|null, version: string|null, git: string|null, isPicoCTR: boolean }}
      */
     static getUF2Info(uf2Data) {
         const parsed = PicobootConnection.parseUF2(uf2Data);
@@ -755,6 +844,7 @@ class PicobootConnection {
             maxAddr: `0x${maxAddr.toString(16).toUpperCase()}`,
             totalSize: totalPayload,
             board: binaryInfo.board,
+            variant: binaryInfo.variant,
             version: binaryInfo.version,
             git: binaryInfo.git,
             isPicoCTR: binaryInfo.isPicoCTR,

@@ -804,6 +804,31 @@ footer a:hover {
     font-size: 0.85rem;
 }
 
+/* Installed firmware info */
+.fw-installed-info {
+    margin-top: 0.5rem;
+    padding: 0.75rem;
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: var(--radius-sm);
+}
+
+.fw-installed-header {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-muted);
+    margin-bottom: 0.35rem;
+}
+
+.fw-installed-loading {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
 /* Progress bar */
 .fw-progress-container {
     margin-top: 0.75rem;
@@ -864,6 +889,11 @@ footer a:hover {
 
 .fw-platform-note a:hover {
     text-decoration: underline;
+}
+
+.fw-return {
+    margin-top: 1.5rem;
+    text-align: center;
 }
 
 /* ============================================
@@ -1082,4 +1112,167 @@ footer a:hover {
     font-size: 0.8rem;
     color: var(--color-error);
     line-height: 1.5;
+}
+
+/* ============================================
+   Button Mapping Section (Accordion)
+   ============================================ */
+
+.mapping-accordion {
+    /* Reset default details/summary styling */
+}
+
+.mapping-accordion > summary {
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    user-select: none;
+}
+
+.mapping-accordion > summary::-webkit-details-marker {
+    display: none;
+}
+
+.mapping-accordion > summary::before {
+    content: '▸';
+    font-size: 1rem;
+    color: var(--color-text-muted);
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+}
+
+.mapping-accordion[open] > summary::before {
+    transform: rotate(90deg);
+}
+
+.mapping-accordion-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+}
+
+.mapping-accordion-header h2 {
+    margin: 0;
+    font-size: inherit;
+}
+
+.accordion-hint {
+    color: var(--color-text-muted);
+    font-size: 0.78rem;
+    font-weight: 400;
+}
+
+.section-desc {
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+    margin: 0.75rem 0 1rem;
+}
+
+.mapping-toolbar {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.pin-mapping-table-wrapper {
+    overflow-x: auto;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+}
+
+.pin-mapping-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+}
+
+.pin-mapping-table thead {
+    background: var(--color-bg-alt, rgba(255, 255, 255, 0.03));
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.pin-mapping-table th {
+    text-align: left;
+    padding: 0.5rem 0.6rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.pin-mapping-table td {
+    padding: 0.35rem 0.6rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    vertical-align: middle;
+}
+
+.pin-mapping-table tr:last-child td {
+    border-bottom: none;
+}
+
+.pin-col-label {
+    width: 10rem;
+}
+
+.pin-col-type,
+.pin-col-target,
+.pin-col-code {
+    min-width: 8rem;
+}
+
+.pin-row {
+    transition: opacity 0.15s;
+}
+
+.pin-label {
+    color: var(--color-text);
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.pin-select {
+    width: 100%;
+    padding: 0.3rem 0.5rem;
+    background: var(--color-bg-dark, rgba(0, 0, 0, 0.2));
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    color: var(--color-text);
+    font-size: 0.78rem;
+    cursor: pointer;
+    transition: border-color 0.15s;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23888' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.5rem center;
+    padding-right: 1.5rem;
+}
+
+.pin-select:hover {
+    border-color: var(--color-primary);
+}
+
+.pin-select:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+}
+
+.pin-select:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.pin-empty {
+    text-align: center;
+    color: var(--color-text-muted);
+    padding: 2rem 1rem;
+    font-style: italic;
 }
