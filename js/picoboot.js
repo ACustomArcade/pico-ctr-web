@@ -431,8 +431,8 @@ class PicobootConnection {
 
     /**
      * Read installed firmware binary info from the device's flash.
-     * Reads flash memory and scans for embedded "Board: ", "Variant: ",
-     * "Git: " strings and version info placed by bi_decl() macros.
+     * Reads flash memory and extracts Pico SDK binary info (bi_decl() data)
+     * using the proper header/pointer table/address remapping algorithm.
      *
      * Must be called after connect(). Handles exitXip() internally.
      *
@@ -567,255 +567,295 @@ class PicobootConnection {
     // Binary Info Extraction (from Pico SDK bi_decl() data embedded in UF2)
     // ========================================================================
 
-    // Binary info markers from Pico SDK
+    // Pico SDK binary info constants (from pico/binary_info/defs.h and structure.h)
     static BINARY_INFO_MARKER_START = 0x7188EBF2;
     static BINARY_INFO_MARKER_END   = 0xE71AA390;
 
-    // Binary info IDs
-    static BINARY_INFO_ID_RP_PROGRAM_VERSION_STRING = 0x11A9BC3A;
+    // Binary info entry types
+    static BI_TYPE_ID_AND_STRING = 6;
+
+    // Binary info tags and IDs
     static BINARY_INFO_TAG_RP = 0x5052; // "RP" in little-endian
+    static BINARY_INFO_ID_RP_PROGRAM_NAME           = 0x02031C86;
+    static BINARY_INFO_ID_RP_PROGRAM_VERSION_STRING = 0x11A9BC3A;
+    static BINARY_INFO_ID_RP_PROGRAM_FEATURE        = 0xA1F4B453;
+    static BINARY_INFO_ID_RP_PICO_BOARD             = 0xB63CFFBB;
+    static BINARY_INFO_ID_RP_SDK_VERSION            = 0x5360B3AB;
+
+    // RP2040 flash base address
+    static RP2040_FLASH_START = 0x10000000;
+
+    /**
+     * Build a memory map from UF2 blocks, sorted by address for binary search.
+     * Equivalent to UF2MemoryMap in picoctr_config.cpp.
+     *
+     * @param {Array<{addr: number, data: Uint8Array}>} blocks
+     * @returns {Array<{addr: number, data: Uint8Array}>} - Sorted by addr
+     */
+    static _buildMemoryMap(blocks) {
+        return [...blocks].sort((a, b) => a.addr - b.addr);
+    }
+
+    /**
+     * Find the segment containing the given address using binary search.
+     * @param {Array<{addr: number, data: Uint8Array}>} segments - Sorted by addr
+     * @param {number} addr
+     * @returns {{addr: number, data: Uint8Array}|null}
+     */
+    static _findSegment(segments, addr) {
+        let lo = 0, hi = segments.length - 1;
+        while (lo <= hi) {
+            const mid = (lo + hi) >>> 1;
+            if (segments[mid].addr > addr) {
+                hi = mid - 1;
+            } else {
+                lo = mid + 1;
+            }
+        }
+        // hi now points to the last segment with seg.addr <= addr
+        if (hi < 0) return null;
+        const seg = segments[hi];
+        if (addr >= seg.addr && addr < seg.addr + seg.data.length) return seg;
+        return null;
+    }
+
+    /**
+     * Read `size` bytes from the memory map starting at `addr`.
+     * Returns a Uint8Array if all bytes were resolved, or null on failure.
+     * Handles reads that span multiple segments.
+     *
+     * @param {Array<{addr: number, data: Uint8Array}>} segments - Sorted by addr
+     * @param {number} addr - Start address
+     * @param {number} size - Number of bytes to read
+     * @returns {Uint8Array|null}
+     */
+    static _readAt(segments, addr, size) {
+        const result = new Uint8Array(size);
+        let offset = 0;
+        let remaining = size;
+        let currentAddr = addr;
+
+        while (remaining > 0) {
+            const seg = PicobootConnection._findSegment(segments, currentAddr);
+            if (!seg) return null;
+
+            const offsetInSeg = currentAddr - seg.addr;
+            const avail = seg.data.length - offsetInSeg;
+            const toRead = Math.min(remaining, avail);
+
+            result.set(seg.data.subarray(offsetInSeg, offsetInSeg + toRead), offset);
+            offset += toRead;
+            currentAddr += toRead;
+            remaining -= toRead;
+        }
+        return result;
+    }
+
+    /**
+     * Read a uint32 (little-endian) from the memory map.
+     * @param {Array<{addr: number, data: Uint8Array}>} segments
+     * @param {number} addr
+     * @returns {number|null}
+     */
+    static _readU32(segments, addr) {
+        const bytes = PicobootConnection._readAt(segments, addr, 4);
+        if (!bytes) return null;
+        return bytes[0] | (bytes[1] << 8) | (bytes[2] << 16) | ((bytes[3] << 24) >>> 0);
+    }
+
+    /**
+     * Read a null-terminated string from the memory map (max 512 chars).
+     * @param {Array<{addr: number, data: Uint8Array}>} segments
+     * @param {number} addr
+     * @returns {string|null}
+     */
+    static _readString(segments, addr) {
+        const bytes = PicobootConnection._readAt(segments, addr, 512);
+        if (!bytes) return null;
+        let end = bytes.indexOf(0);
+        if (end < 0) end = bytes.length;
+        return new TextDecoder().decode(bytes.subarray(0, end));
+    }
+
+    /**
+     * Remap a runtime address using the binary info copy table.
+     * In the Pico SDK linker script, some binary info data lives in .data (RAM).
+     * The mapping table translates RAM addresses back to flash storage locations.
+     *
+     * @param {number} addr - Address to remap
+     * @param {Array<{flashStart: number, ramStart: number, ramEnd: number}>} mappings
+     * @returns {number} - Remapped address (or original if no mapping applies)
+     */
+    static _remapAddress(addr, mappings) {
+        for (const m of mappings) {
+            if (addr >= m.ramStart && addr < m.ramEnd) {
+                return m.flashStart + (addr - m.ramStart);
+            }
+        }
+        return addr;
+    }
 
     /**
      * Extract PicoCTR binary info from UF2 payload data.
-     * Scans UF2 block payloads for embedded board name, git version, and
-     * firmware version strings placed by the Pico SDK bi_decl() macros.
      *
-     * Reference: amgearco-ctr/tools/picoctr_config.cpp extractVersionFromUF2()
-     *            and extractBoardFromUF2()
+     * Follows the Pico SDK / picotool algorithm:
+     * 1. Build an address→data memory map from UF2 blocks.
+     * 2. Scan the first 64 words after boot2 for the binary_info header:
+     *    [MARKER_START, bi_start, bi_end, mapping_table, MARKER_END]
+     * 3. Load the address remapping table (RAM→flash copy table).
+     * 4. Read the pointer array [bi_start, bi_end) — each entry is a pointer
+     *    to a binary_info struct.
+     * 5. For each entry of type ID_AND_STRING with tag "RP", extract the string.
+     *
+     * Reference: amgearco-ctr/tools/picoctr_config.cpp extractBinaryInfo()
      *
      * @param {Array<{addr: number, data: Uint8Array}>} blocks - Parsed UF2 blocks
      * @returns {{ board: string|null, variant: string|null, version: string|null, git: string|null, isPicoCTR: boolean }}
      */
     static extractBinaryInfo(blocks) {
-        let board = null;
-        let variant = null;
-        let version = null;
-        let git = null;
-
-        for (const block of blocks) {
-            const payload = block.data;
-            const len = payload.length;
-
-            // --- Scan for "Board: " and "Git: " strings ---
-            for (let i = 0; i < len - 7; i++) {
-                // Check for "Board: " (0x42 0x6F 0x61 0x72 0x64 0x3A 0x20)
-                if (!board &&
-                    payload[i]     === 0x42 && // B
-                    payload[i + 1] === 0x6F && // o
-                    payload[i + 2] === 0x61 && // a
-                    payload[i + 3] === 0x72 && // r
-                    payload[i + 4] === 0x64 && // d
-                    payload[i + 5] === 0x3A && // :
-                    payload[i + 6] === 0x20) { // space
-                    // Extract board name: alphanumeric, _, -
-                    let j = i + 7;
-                    // skip extra whitespace
-                    while (j < len && (payload[j] === 0x20 || payload[j] === 0x09)) j++;
-                    let name = '';
-                    while (j < len) {
-                        const c = payload[j];
-                        if ((c >= 0x41 && c <= 0x5A) ||  // A-Z
-                            (c >= 0x61 && c <= 0x7A) ||  // a-z
-                            (c >= 0x30 && c <= 0x39) ||  // 0-9
-                            c === 0x5F || c === 0x2D) {  // _ -
-                            name += String.fromCharCode(c);
-                            j++;
-                        } else {
-                            break;
-                        }
-                    }
-                    if (name.length > 0) {
-                        board = name;
-                    }
-                }
-
-                // Check for "Variant: " (0x56 0x61 0x72 0x69 0x61 0x6E 0x74 0x3A 0x20)
-                if (!variant && i < len - 9 &&
-                    payload[i]     === 0x56 && // V
-                    payload[i + 1] === 0x61 && // a
-                    payload[i + 2] === 0x72 && // r
-                    payload[i + 3] === 0x69 && // i
-                    payload[i + 4] === 0x61 && // a
-                    payload[i + 5] === 0x6E && // n
-                    payload[i + 6] === 0x74 && // t
-                    payload[i + 7] === 0x3A && // :
-                    payload[i + 8] === 0x20) { // space
-                    let j = i + 9;
-                    while (j < len && (payload[j] === 0x20 || payload[j] === 0x09)) j++;
-                    let name = '';
-                    while (j < len) {
-                        const c = payload[j];
-                        if ((c >= 0x41 && c <= 0x5A) ||  // A-Z
-                            (c >= 0x61 && c <= 0x7A) ||  // a-z
-                            (c >= 0x30 && c <= 0x39) ||  // 0-9
-                            c === 0x5F || c === 0x2D) {  // _ -
-                            name += String.fromCharCode(c);
-                            j++;
-                        } else {
-                            break;
-                        }
-                    }
-                    if (name.length > 0) {
-                        variant = name;
-                    }
-                }
-
-                // Check for "Git: " (0x47 0x69 0x74 0x3A 0x20)
-                if (!git && i < len - 5 &&
-                    payload[i]     === 0x47 && // G
-                    payload[i + 1] === 0x69 && // i
-                    payload[i + 2] === 0x74 && // t
-                    payload[i + 3] === 0x3A && // :
-                    payload[i + 4] === 0x20) { // space
-                    let j = i + 5;
-                    while (j < len && (payload[j] === 0x20 || payload[j] === 0x09)) j++;
-                    let ver = '';
-                    while (j < len && ver.length < 32) {
-                        const c = payload[j];
-                        // version chars: alphanumeric, ., -, +, _
-                        if ((c >= 0x30 && c <= 0x39) || // 0-9
-                            (c >= 0x41 && c <= 0x5A) || // A-Z
-                            (c >= 0x61 && c <= 0x7A) || // a-z
-                            c === 0x2E || c === 0x2D || c === 0x2B || c === 0x5F) {
-                            ver += String.fromCharCode(c);
-                            j++;
-                        } else {
-                            break;
-                        }
-                    }
-                    if (ver.length > 0) {
-                        git = ver;
-                    }
-                }
-            }
-
-            // --- Scan for binary info markers to find program version ---
-            if (!version && len >= 20) {
-                const wordCount = Math.floor(len / 4);
-                const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
-
-                for (let w = 0; w + 4 < wordCount; w++) {
-                    const word = view.getUint32(w * 4, true);
-                    if (word === PicobootConnection.BINARY_INFO_MARKER_START) {
-                        // Check if nearby entry has version string ID
-                        if (w + 2 < wordCount) {
-                            const id = view.getUint32((w + 2) * 4, true);
-                            if (id === PicobootConnection.BINARY_INFO_ID_RP_PROGRAM_VERSION_STRING) {
-                                // Search nearby area for version pattern X.Y.Z
-                                const searchStart = Math.max(0, w * 4 - 32);
-                                const searchEnd = Math.min(len, w * 4 + 64);
-
-                                for (let si = searchStart; si < searchEnd - 5; si++) {
-                                    const c = payload[si];
-                                    // Look for digit.digit pattern
-                                    if (c >= 0x30 && c <= 0x39) { // starts with digit
-                                        const next = payload[si + 1];
-                                        if (next === 0x2E || (next >= 0x30 && next <= 0x39)) { // . or digit
-                                            // First, collect the numeric X.Y.Z portion
-                                            let ver = '';
-                                            let k = si;
-                                            while (k < searchEnd && ver.length < 32) {
-                                                const vc = payload[k];
-                                                if ((vc >= 0x30 && vc <= 0x39) || vc === 0x2E) { // digit or .
-                                                    ver += String.fromCharCode(vc);
-                                                    k++;
-                                                } else {
-                                                    break;
-                                                }
-                                            }
-                                            // Check for pre-release suffix like -rc1, -beta2, -alpha3
-                                            if (k < searchEnd && payload[k] === 0x2D) { // '-'
-                                                let suffix = '';
-                                                let sk = k;
-                                                while (sk < searchEnd && suffix.length < 16) {
-                                                    const sc = payload[sk];
-                                                    // Allow: - . alphanumeric
-                                                    if (sc === 0x2D || sc === 0x2E ||
-                                                        (sc >= 0x30 && sc <= 0x39) ||
-                                                        (sc >= 0x41 && sc <= 0x5A) ||
-                                                        (sc >= 0x61 && sc <= 0x7A)) {
-                                                        suffix += String.fromCharCode(sc);
-                                                        sk++;
-                                                    } else {
-                                                        break;
-                                                    }
-                                                }
-                                                if (suffix.length > 1) ver += suffix;
-                                            }
-                                            // Validate X.Y.Z format (with optional pre-release suffix)
-                                            const numericPart = ver.split('-')[0];
-                                            if (numericPart.length >= 5) {
-                                                const parts = numericPart.split('.');
-                                                if (parts.length >= 2 && parts.length <= 4 &&
-                                                    parts.every(p => p.length > 0 && !isNaN(p))) {
-                                                    version = ver;
-                                                    break;
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Early exit if we found everything
-            if (board && variant && version && git) break;
+        if (!blocks || blocks.length === 0) {
+            return { board: null, variant: null, version: null, git: null, isPicoCTR: false };
         }
 
-        // Fallback: scan all blocks for X.Y.Z version pattern if binary info didn't find it
-        if (!version) {
-            for (const block of blocks) {
-                const payload = block.data;
-                const len = payload.length;
-                for (let i = 0; i < len - 5; i++) {
-                    if (payload[i] >= 0x30 && payload[i] <= 0x39 &&       // d
-                        payload[i + 1] === 0x2E &&                         // .
-                        payload[i + 2] >= 0x30 && payload[i + 2] <= 0x39 && // d
-                        payload[i + 3] === 0x2E &&                         // .
-                        payload[i + 4] >= 0x30 && payload[i + 4] <= 0x39) { // d
-                        // Collect numeric X.Y.Z portion
-                        let ver = '';
-                        let k = i;
-                        while (k < len && ver.length < 20) {
-                            const c = payload[k];
-                            if ((c >= 0x30 && c <= 0x39) || c === 0x2E) {
-                                ver += String.fromCharCode(c);
-                                k++;
-                            } else break;
-                        }
-                        // Check for pre-release suffix like -rc1, -beta2, -alpha3
-                        if (k < len && payload[k] === 0x2D) {
-                            let suffix = '';
-                            let sk = k;
-                            while (sk < len && suffix.length < 16) {
-                                const sc = payload[sk];
-                                if (sc === 0x2D || sc === 0x2E ||
-                                    (sc >= 0x30 && sc <= 0x39) ||
-                                    (sc >= 0x41 && sc <= 0x5A) ||
-                                    (sc >= 0x61 && sc <= 0x7A)) {
-                                    suffix += String.fromCharCode(sc);
-                                    sk++;
-                                } else break;
-                            }
-                            if (suffix.length > 1) ver += suffix;
-                        }
-                        const numericPart = ver.split('-')[0];
-                        if (numericPart.length >= 5) {
-                            const parts = numericPart.split('.');
-                            if (parts.length >= 2 && parts.length <= 3 &&
-                                parts.every(p => p.length > 0 && !isNaN(p))) {
-                                version = ver;
-                                break;
-                            }
-                        }
-                    }
+        const segments = PicobootConnection._buildMemoryMap(blocks);
+
+        // Get binary start address (lowest mapped address)
+        let base = segments[0].addr;
+        if (!base && base !== 0) {
+            return { board: null, variant: null, version: null, git: null, isPicoCTR: false };
+        }
+
+        // For flash binaries, skip the 256-byte boot2 stage
+        if (base === PicobootConnection.RP2040_FLASH_START) {
+            base += 0x100;
+        }
+
+        // Scan first 64 words for the binary info header (RP2040 limit)
+        const MAX_WORDS = 64;
+        const headerBytes = PicobootConnection._readAt(segments, base, MAX_WORDS * 4);
+        if (!headerBytes) {
+            return { board: null, variant: null, version: null, git: null, isPicoCTR: false };
+        }
+
+        const headerView = new DataView(headerBytes.buffer, headerBytes.byteOffset, headerBytes.byteLength);
+        let biStart = 0, biEnd = 0, mappingTableAddr = 0;
+        let found = false;
+
+        for (let i = 0; i + 4 < MAX_WORDS; i++) {
+            const w0 = headerView.getUint32(i * 4, true);
+            const w4 = headerView.getUint32((i + 4) * 4, true);
+            if (w0 === PicobootConnection.BINARY_INFO_MARKER_START &&
+                w4 === PicobootConnection.BINARY_INFO_MARKER_END) {
+                biStart = headerView.getUint32((i + 1) * 4, true);
+                biEnd   = headerView.getUint32((i + 2) * 4, true);
+                mappingTableAddr = headerView.getUint32((i + 3) * 4, true);
+                if (biEnd > biStart && (biStart & 3) === 0 && (biEnd & 3) === 0) {
+                    found = true;
+                    break;
                 }
-                if (version) break;
             }
         }
+
+        if (!found) {
+            return { board: null, variant: null, version: null, git: null, isPicoCTR: false };
+        }
+
+        // Load address remapping table (RAM → flash copy table)
+        const addrMappings = [];
+        if (mappingTableAddr) {
+            for (let safety = 0; safety < 10; safety++) {
+                const entryBytes = PicobootConnection._readAt(segments, mappingTableAddr, 12);
+                if (!entryBytes) break;
+                const entryView = new DataView(entryBytes.buffer, entryBytes.byteOffset, entryBytes.byteLength);
+                const flashSrc = entryView.getUint32(0, true);
+                const ramStart = entryView.getUint32(4, true);
+                const ramEnd   = entryView.getUint32(8, true);
+                if (flashSrc === 0) break; // null terminator
+                addrMappings.push({ flashStart: flashSrc, ramStart, ramEnd });
+                mappingTableAddr += 12;
+            }
+        }
+
+        // Read the pointer array [biStart, biEnd)
+        const count = (biEnd - biStart) / 4;
+        if (count > 1000) {
+            return { board: null, variant: null, version: null, git: null, isPicoCTR: false };
+        }
+
+        const biStartFlash = PicobootConnection._remapAddress(biStart, addrMappings);
+        const ptrBytes = PicobootConnection._readAt(segments, biStartFlash, count * 4);
+        if (!ptrBytes) {
+            return { board: null, variant: null, version: null, git: null, isPicoCTR: false };
+        }
+
+        const ptrView = new DataView(ptrBytes.buffer, ptrBytes.byteOffset, ptrBytes.byteLength);
+
+        // Parsed results
+        let programName = null;
+        let programVersion = null;
+        let picoBoard = null;
+        let sdkVersion = null;
+        const programFeatures = [];
+
+        // Visit each binary info entry
+        for (let i = 0; i < count; i++) {
+            const ptr = ptrView.getUint32(i * 4, true);
+            if (ptr === 0) continue;
+
+            // Remap pointer if it's in RAM
+            const entryAddr = PicobootConnection._remapAddress(ptr, addrMappings);
+
+            // Read the core header: {uint16_t type, uint16_t tag}
+            const coreBytes = PicobootConnection._readAt(segments, entryAddr, 4);
+            if (!coreBytes) continue;
+
+            const type = coreBytes[0] | (coreBytes[1] << 8);
+            const tag  = coreBytes[2] | (coreBytes[3] << 8);
+
+            if (type === PicobootConnection.BI_TYPE_ID_AND_STRING &&
+                tag === PicobootConnection.BINARY_INFO_TAG_RP) {
+                // Structure: {core(4), id(4), value_ptr(4)} = 12 bytes total
+                const entryBytes = PicobootConnection._readAt(segments, entryAddr, 12);
+                if (!entryBytes) continue;
+
+                const entryView = new DataView(entryBytes.buffer, entryBytes.byteOffset, entryBytes.byteLength);
+                const id = entryView.getUint32(4, true);
+                const valuePtr = entryView.getUint32(8, true);
+
+                // Remap the string pointer and read the null-terminated string
+                const strAddr = PicobootConnection._remapAddress(valuePtr, addrMappings);
+                const value = PicobootConnection._readString(segments, strAddr);
+                if (!value) continue;
+
+                if (id === PicobootConnection.BINARY_INFO_ID_RP_PROGRAM_NAME) {
+                    programName = value;
+                } else if (id === PicobootConnection.BINARY_INFO_ID_RP_PROGRAM_VERSION_STRING) {
+                    programVersion = value;
+                } else if (id === PicobootConnection.BINARY_INFO_ID_RP_PROGRAM_FEATURE) {
+                    programFeatures.push(value);
+                } else if (id === PicobootConnection.BINARY_INFO_ID_RP_PICO_BOARD) {
+                    picoBoard = value;
+                } else if (id === PicobootConnection.BINARY_INFO_ID_RP_SDK_VERSION) {
+                    sdkVersion = value;
+                }
+            }
+        }
+
+        // Extract board, variant, and git from features (same as C++ getFeatureValue)
+        const getFeatureValue = (prefix) => {
+            for (const f of programFeatures) {
+                if (f.startsWith(prefix)) {
+                    return f.substring(prefix.length).trimStart();
+                }
+            }
+            return null;
+        };
+
+        // Board: prefer "Board:" feature, fall back to PICO_BOARD
+        const board = getFeatureValue('Board: ') || picoBoard || null;
+        const variant = getFeatureValue('Variant: ') || null;
+        const git = getFeatureValue('Git: ') || null;
+        const version = programVersion || null;
 
         return {
             board,
