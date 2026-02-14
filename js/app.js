@@ -1140,12 +1140,14 @@
         dom.fwInfoSize.textContent = formatBytes(info.totalSize);
         dom.fwFileInfo.style.display = '';
 
-        if (!info.isPicoCTR) {
-            dom.fwFileInfo.style.display = 'none';
-            dom.fwValidationWarning.style.display = '';
-            log(`Error: "${name}" does not appear to be PicoCTR firmware`, 'error');
-            return null;
-        }
+        // TODO: re-enable PicoCTR firmware validation once binary info markers
+        // are stable across all build variants.
+        // if (!info.isPicoCTR) {
+        //     dom.fwFileInfo.style.display = 'none';
+        //     dom.fwValidationWarning.style.display = '';
+        //     log(`Error: "${name}" does not appear to be PicoCTR firmware`, 'error');
+        //     return null;
+        // }
 
         dom.fwValidationWarning.style.display = 'none';
 
