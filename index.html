@@ -17,6 +17,19 @@
     </header>
 
     <main>
+        <!-- Tab Navigation -->
+        <nav class="tab-bar" role="tablist">
+            <button class="tab-btn active" data-tab="device" role="tab" aria-selected="true">
+                <span class="tab-icon">🎮</span> Device
+            </button>
+            <button class="tab-btn" data-tab="ledspicer" role="tab" aria-selected="false">
+                <span class="tab-icon">💡</span> LEDSpicer
+            </button>
+        </nav>
+
+        <!-- ============================ DEVICE TAB ============================ -->
+        <div id="tab-device" class="tab-panel">
+
         <!-- Browser Support Warning -->
         <div id="browser-warning" class="card warning-card" style="display: none;">
             <h2>⚠️ Browser Not Supported</h2>
@@ -368,6 +381,101 @@
                 <div class="log-entry log-info">Ready. Connect a PicoCTR device to begin.</div>
             </div>
         </section>
+
+        </div><!-- /#tab-device -->
+
+        <!-- ============================ LEDSPICER TAB ============================ -->
+        <div id="tab-ledspicer" class="tab-panel" hidden>
+
+            <!-- Intro / Import -->
+            <section class="card">
+                <h2>💡 LEDSpicer Configuration</h2>
+                <p class="section-desc">
+                    Build a <code>ledspicer.conf</code> for your controller's RGB LEDs.
+                    No device connection required &mdash; assign button names to connectors,
+                    organize them into groups, then download or copy the generated file.
+                </p>
+                <div class="ls-toolbar">
+                    <button id="ls-import-btn" class="btn btn-secondary btn-small" title="Load an existing ledspicer.conf to edit">
+                        <span class="btn-icon">📥</span> Upload ledspicer.conf
+                    </button>
+                    <input type="file" id="ls-file-input" accept=".conf,.xml,text/xml" style="display: none;">
+                    <button id="ls-clear-btn" class="btn btn-ghost btn-small" title="Clear all button names and groups">
+                        <span class="btn-icon">🗑️</span> Clear All
+                    </button>
+                </div>
+                <div id="ls-import-status" class="ls-import-status" style="display: none;"></div>
+            </section>
+
+            <!-- Output Settings -->
+            <section class="card">
+                <h2>Output Settings</h2>
+                <div class="settings-form">
+                    <div class="form-group">
+                        <label for="ls-port-auto">Auto-detect Port</label>
+                        <div class="toggle-wrapper">
+                            <input type="checkbox" id="ls-port-auto" class="toggle-input" checked>
+                            <label for="ls-port-auto" class="toggle-label"></label>
+                        </div>
+                    </div>
+                    <div class="form-group" id="ls-port-row" style="display: none;">
+                        <label for="ls-device-port">Serial Port</label>
+                        <input type="text" id="ls-device-port" class="form-input" placeholder="/dev/ttyACM0" value="/dev/ttyACM0">
+                    </div>
+                </div>
+                <p class="section-desc ls-port-hint">
+                    When auto-detect is on, the <code>port</code> attribute is omitted so LEDSpicer
+                    detects the device automatically. Turn it off to specify a fixed serial port.
+                </p>
+            </section>
+
+            <!-- Connectors -->
+            <section class="card">
+                <h2>Connectors</h2>
+                <p class="section-desc">
+                    Each connector drives one RGB LED. Add one or more button names to a connector
+                    &mdash; every name on the same connector lights up together.
+                </p>
+                <div class="ls-connector-filter">
+                    <label class="ls-checkbox-label">
+                        <input type="checkbox" id="ls-show-empty"> Show empty connectors
+                    </label>
+                </div>
+                <div id="ls-connectors" class="ls-connectors"></div>
+            </section>
+
+            <!-- Groups -->
+            <section class="card">
+                <h2>
+                    Groups
+                    <button id="ls-add-group" class="btn btn-small btn-ghost" title="Add a new group">
+                        <span class="btn-icon">➕</span> Add Group
+                    </button>
+                </h2>
+                <p class="section-desc">
+                    Groups let LEDSpicer address a set of buttons together (e.g. all of Player 1's buttons).
+                </p>
+                <div id="ls-groups" class="ls-groups"></div>
+                <p id="ls-no-groups" class="ls-empty-hint">No groups yet. Click "Add Group" to create one.</p>
+            </section>
+
+            <!-- Generated Output -->
+            <section class="card">
+                <h2>
+                    Generated ledspicer.conf
+                    <span class="ls-output-actions">
+                        <button id="ls-copy" class="btn btn-small btn-secondary" title="Copy to clipboard">
+                            <span class="btn-icon">📋</span> Copy
+                        </button>
+                        <button id="ls-download" class="btn btn-small btn-primary" title="Download ledspicer.conf">
+                            <span class="btn-icon">⬇️</span> Download
+                        </button>
+                    </span>
+                </h2>
+                <pre id="ls-output" class="ls-output"></pre>
+            </section>
+
+        </div><!-- /#tab-ledspicer -->
     </main>
 
     <footer>
@@ -393,5 +501,6 @@
     <script src="js/picoboot.js"></script>
     <script src="js/webusb.js"></script>
     <script src="js/app.js"></script>
+    <script src="js/ledspicer.js"></script>
 </body>
 </html>

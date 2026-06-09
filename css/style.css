@@ -1282,3 +1282,254 @@ footer a:hover {
     padding: 2rem 1rem;
     font-style: italic;
 }
+
+/* ============================================
+   Tabs
+   ============================================ */
+
+.tab-bar {
+    display: flex;
+    gap: 0.5rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 0.4rem;
+    box-shadow: var(--shadow);
+}
+
+.tab-btn {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    padding: 0.6rem 1rem;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--color-text-muted);
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.tab-btn:hover {
+    background: var(--color-surface-hover);
+    color: var(--color-text);
+}
+
+.tab-btn.active {
+    background: var(--color-primary);
+    color: #fff;
+}
+
+.tab-icon {
+    font-size: 1.1rem;
+}
+
+.tab-panel[hidden] {
+    display: none;
+}
+
+.tab-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+/* ============================================
+   LEDSpicer Tab
+   ============================================ */
+
+.section-desc {
+    color: var(--color-text-muted);
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+}
+
+.section-desc code,
+.ls-output-actions code {
+    background: var(--color-bg);
+    padding: 0.1rem 0.35rem;
+    border-radius: 4px;
+    font-size: 0.85em;
+}
+
+.ls-toolbar {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.ls-import-status {
+    margin-top: 0.75rem;
+    padding: 0.6rem 0.85rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    background: var(--color-surface-hover);
+    border: 1px solid var(--color-border);
+}
+
+.ls-import-status--ok {
+    border-color: var(--color-success);
+    color: var(--color-success);
+}
+
+.ls-import-status--warn {
+    border-color: var(--color-warning);
+    color: var(--color-warning);
+}
+
+.ls-import-status--error {
+    border-color: var(--color-danger);
+    color: var(--color-danger);
+}
+
+.ls-connector-filter {
+    margin-bottom: 1rem;
+}
+
+.ls-checkbox-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.88rem;
+    color: var(--color-text);
+    cursor: pointer;
+}
+
+.ls-connectors {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.ls-connector {
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 0.85rem;
+}
+
+.ls-connector-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.6rem;
+}
+
+.ls-connector-label {
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.ls-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-bottom: 0.6rem;
+}
+
+.ls-chips:empty {
+    margin-bottom: 0;
+}
+
+.ls-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: var(--color-primary);
+    color: #fff;
+    padding: 0.2rem 0.3rem 0.2rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.82rem;
+}
+
+.ls-chip-remove {
+    border: none;
+    background: rgba(255, 255, 255, 0.2);
+    color: #fff;
+    width: 1.1rem;
+    height: 1.1rem;
+    line-height: 1;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 0.9rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition);
+}
+
+.ls-chip-remove:hover {
+    background: rgba(255, 255, 255, 0.4);
+}
+
+.ls-add-name {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.ls-add-name input {
+    flex: 1;
+}
+
+.ls-groups {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+}
+
+.ls-group {
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 0.85rem;
+}
+
+.ls-group-head {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.ls-group-head input {
+    flex: 1;
+}
+
+.ls-group-delete {
+    flex: 0 0 auto;
+}
+
+.ls-group-members {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 0.4rem 0.85rem;
+}
+
+.ls-empty-hint {
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+    font-style: italic;
+}
+
+.ls-output-actions {
+    display: inline-flex;
+    gap: 0.5rem;
+}
+
+.ls-output {
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 1rem;
+    font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
+    font-size: 0.78rem;
+    line-height: 1.5;
+    color: var(--color-text);
+    overflow-x: auto;
+    white-space: pre;
+    max-height: 480px;
+    overflow-y: auto;
+}
